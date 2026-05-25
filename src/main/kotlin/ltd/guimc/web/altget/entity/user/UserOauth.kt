@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName
 @TableName
 class UserOauth {
     @TableId
-    var userId: Long? = null
+    var userId: Int? = null
 
     var githubId: String? = null
 

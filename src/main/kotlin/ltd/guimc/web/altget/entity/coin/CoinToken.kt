@@ -14,12 +14,12 @@ class CoinToken {
 
     var coinAmount: Int? = null
 
-    var createdBy: Long? = null
+    var createdBy: Int? = null
 
     @TableField(fill = FieldFill.INSERT)
     var createdAt: LocalDateTime? = null
 
-    var redeemedBy: Long? = null
+    var redeemedBy: Int? = null
 
     var redeemedAt: LocalDateTime? = null
 

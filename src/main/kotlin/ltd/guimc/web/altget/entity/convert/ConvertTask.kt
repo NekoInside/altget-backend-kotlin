@@ -9,7 +9,7 @@ class ConvertTask {
     @TableId(type = IdType.ASSIGN_UUID)
     var taskId: String? = null
 
-    var userId: Long? = null
+    var userId: Int? = null
 
     var userName: String? = null
 

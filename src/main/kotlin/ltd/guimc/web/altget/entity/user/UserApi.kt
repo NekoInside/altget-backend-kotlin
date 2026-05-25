@@ -7,7 +7,7 @@ import ltd.guimc.web.altget.enum.EnumApiLimitLevel
 @TableName
 class UserApi {
     @TableId
-    var userId: Long? = null
+    var userId: Int? = null
 
     var apiKey: String? = null
 

@@ -13,7 +13,7 @@ class CoinTtransactionHistory {
     @TableId(type = IdType.AUTO)
     var id: Long = 0
 
-    var userId: Long = 0
+    var userId: Int = 0
 
     var amount: Int = 0
 

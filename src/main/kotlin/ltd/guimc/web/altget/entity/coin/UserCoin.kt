@@ -9,7 +9,7 @@ import java.time.LocalDateTime
 @TableName
 class UserCoin {
     @TableId
-    var id: Int? = null
+    var userId: Int? = null
 
     var balance: Int? = null
 

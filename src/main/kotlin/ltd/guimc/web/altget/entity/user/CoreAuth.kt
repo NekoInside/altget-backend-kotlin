@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName
 @TableName
 class CoreAuth {
     @TableId(type = IdType.AUTO)
-    var userId: Long = 0
+    var userId: Int = 0
 
     var username: String? = null
 
