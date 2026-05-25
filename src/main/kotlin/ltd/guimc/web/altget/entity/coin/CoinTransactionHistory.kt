@@ -9,7 +9,7 @@ import ltd.guimc.web.altget.enum.EnumTransactionType
 import java.time.LocalDateTime
 
 @TableName
-class CoinTtransactionHistory {
+class CoinTransactionHistory {
     @TableId(type = IdType.AUTO)
     var id: Long = 0
 
