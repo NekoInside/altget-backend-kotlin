@@ -57,3 +57,9 @@ jwt:
   issuer: altget
   access-token-expiration: 7d
   register-verify-token-expiration: 10m
+
+site:
+  coin-buy-url: https://example.com/buy
+  domain: localhost:8080
+  fake-account-salt: default_salt_value
+  srp-session-ttl: 60
