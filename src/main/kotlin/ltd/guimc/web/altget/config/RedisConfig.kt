@@ -9,9 +9,21 @@ import org.springframework.data.redis.serializer.StringRedisSerializer
 @Configuration
 class RedisConfig {
 
-    @Bean
-    fun redisTemplate(connectionFactory: RedisConnectionFactory): RedisTemplate<String, String> {
+    @Bean("stringRedisTemplate")
+    fun stringRedisTemplate(connectionFactory: RedisConnectionFactory): RedisTemplate<String, String> {
         val template = RedisTemplate<String, String>()
+        template.setConnectionFactory(connectionFactory)
+        template.keySerializer = StringRedisSerializer()
+        template.valueSerializer = StringRedisSerializer()
+        template.hashKeySerializer = StringRedisSerializer()
+        template.hashValueSerializer = StringRedisSerializer()
+        template.afterPropertiesSet()
+        return template
+    }
+
+    @Bean("objectRedisTemplate")
+    fun objectRedisTemplate(connectionFactory: RedisConnectionFactory): RedisTemplate<String, Any> {
+        val template = RedisTemplate<String, Any>()
         template.setConnectionFactory(connectionFactory)
         template.keySerializer = StringRedisSerializer()
         template.valueSerializer = StringRedisSerializer()

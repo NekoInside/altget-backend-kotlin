@@ -1,12 +1,14 @@
 package ltd.guimc.web.altget.component
 
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Component
 import java.time.Duration
 
 @Component
 class RedisSessionComponent(
-    private val redisTemplate: RedisTemplate<String, String>
+    @Qualifier("objectRedisTemplate")
+    private val stringRedisTemplate: RedisTemplate<String, String>
 ) {
 
     companion object {
@@ -21,7 +23,7 @@ class RedisSessionComponent(
      */
     fun saveSession(userId: Int, sessionId: String) {
         val key = sessionKey(userId)
-        redisTemplate.opsForValue().set(key, sessionId, SESSION_TTL)
+        stringRedisTemplate.opsForValue().set(key, sessionId, SESSION_TTL)
     }
 
     /**
@@ -31,7 +33,7 @@ class RedisSessionComponent(
      */
     fun getSession(userId: Int): String? {
         val key = sessionKey(userId)
-        return redisTemplate.opsForValue().get(key)
+        return stringRedisTemplate.opsForValue().get(key)
     }
 
     /**
@@ -41,7 +43,7 @@ class RedisSessionComponent(
      */
     fun deleteSession(userId: Int): Boolean {
         val key = sessionKey(userId)
-        return redisTemplate.delete(key)
+        return stringRedisTemplate.delete(key)
     }
 
     /**
@@ -51,7 +53,7 @@ class RedisSessionComponent(
      */
     fun refreshSession(userId: Int): Boolean {
         val key = sessionKey(userId)
-        return redisTemplate.expire(key, SESSION_TTL)
+        return stringRedisTemplate.expire(key, SESSION_TTL)
     }
 
     /**
@@ -61,7 +63,7 @@ class RedisSessionComponent(
      */
     fun existsSession(userId: Int): Boolean {
         val key = sessionKey(userId)
-        return redisTemplate.hasKey(key)
+        return stringRedisTemplate.hasKey(key)
     }
 
     private fun sessionKey(userId: Int): String = "$SESSION_KEY_PREFIX$userId"

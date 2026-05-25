@@ -16,6 +16,17 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 0
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: your-email@example.com
+    password: your-email-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
@@ -29,3 +40,20 @@ mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     map-underscore-to-camel-case: true
+
+captcha:
+  geetest:
+    id: your-geetest-id
+    key: your-geetest-key
+    api-server: https://gcaptcha4.geetest.com/validate
+
+mail:
+  from: noreply@example.com
+  domain: example.com
+  default-expiration-minutes: 30
+
+jwt:
+  secret: your-jwt-secret-key-here-at-least-256-bits
+  issuer: altget
+  access-token-expiration: 7d
+  register-verify-token-expiration: 10m
