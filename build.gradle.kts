@@ -1,8 +1,8 @@
 plugins {
-    kotlin("jvm") version "2.2.21"
-    kotlin("plugin.spring") version "2.2.21"
-    id("org.springframework.boot") version "4.0.6"
-    id("io.spring.dependency-management") version "1.1.7"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
 }
 
 group = "ltd.guimc.web"
@@ -20,31 +20,31 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-data-redis")
-    implementation("org.springframework.boot:spring-boot-starter-jdbc")
-    implementation("org.springframework.boot:spring-boot-starter-security")
-    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
-    implementation("org.springframework.boot:spring-boot-starter-webmvc")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:4.0.1")
-    implementation("com.baomidou:mybatis-plus-spring-boot4-starter:3.5.16")
-    implementation("com.baomidou:mybatis-plus-jsqlparser:3.5.16")
-    implementation("org.springframework.security:spring-security-webauthn")
-    implementation("tools.jackson.module:jackson-module-kotlin")
-    implementation("io.jsonwebtoken:jjwt-api:0.13.0")
-    implementation("io.jsonwebtoken:jjwt-impl:0.13.0")
-    compileOnly("org.projectlombok:lombok")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
-    annotationProcessor("org.projectlombok:lombok")
-    testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-jdbc-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-security-oauth2-client-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("org.mybatis.spring.boot:mybatis-spring-boot-starter-test:4.0.1")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation(libs.spring.boot.starter.data.redis)
+    implementation(libs.spring.boot.starter.jdbc)
+    implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.boot.starter.oauth2.client)
+    implementation(libs.spring.boot.starter.webmvc)
+    implementation(libs.kotlin.reflect)
+    implementation(libs.mybatis.spring.boot.starter)
+    implementation(libs.mybatis.plus.spring.boot4.starter)
+    implementation(libs.mybatis.plus.jsqlparser)
+    implementation(libs.spring.security.webauthn)
+    implementation(libs.jackson.module.kotlin)
+    implementation(libs.jjwt.api)
+    implementation(libs.jjwt.impl)
+    compileOnly(libs.lombok)
+    runtimeOnly(libs.mariadb.java.client)
+    runtimeOnly(libs.jjwt.jackson)
+    annotationProcessor(libs.lombok)
+    testImplementation(libs.spring.boot.starter.data.redis.test)
+    testImplementation(libs.spring.boot.starter.jdbc.test)
+    testImplementation(libs.spring.boot.starter.oauth2.client.test)
+    testImplementation(libs.spring.boot.starter.security.test)
+    testImplementation(libs.spring.boot.starter.webmvc.test)
+    testImplementation(libs.kotlin.test.junit5)
+    testImplementation(libs.mybatis.spring.boot.starter.test)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 kotlin {
