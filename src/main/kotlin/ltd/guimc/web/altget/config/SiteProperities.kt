@@ -7,5 +7,7 @@ data class SiteProperities(
     val domain: String = "localhost:8080",
     val coinBuyUrl: String = "https://example.com/buy",
     val fakeAccountSalt: String = "default_salt_value",
-    val srpSessionTtl: Int = 60
+    val srpSessionTtl: Int = 60,
+    val githubClientId: String = "",
+    val githubClientSecret: String = ""
 )

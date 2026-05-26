@@ -1,7 +1,11 @@
 package ltd.guimc.web.altget.controller
 
+import cn.hutool.core.net.url.UrlBuilder
+import cn.hutool.json.JSONObject
 import com.nimbusds.srp6.SRP6CryptoParams
 import com.nimbusds.srp6.SRP6ServerSession
+import jakarta.servlet.http.HttpServletResponse
+import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.component.EmailComponent
 import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.component.JwtTokenComponent
@@ -14,6 +18,7 @@ import ltd.guimc.web.altget.entity.request.auth.RegisterRequest
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.auth.LoginChallengeResponse
 import ltd.guimc.web.altget.entity.response.auth.LoginVerifyResponse
+import ltd.guimc.web.altget.enum.EnumOauthUsage
 import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserOauthService
@@ -24,10 +29,14 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import java.math.BigInteger
+import java.net.URI
 import java.net.URLEncoder
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.security.MessageDigest
 import java.time.Duration
-import java.util.UUID
+import java.util.*
 
 @RestController("/api/auth")
 class AuthController(
@@ -85,11 +94,11 @@ class AuthController(
     // </editor-fold>
 
     // <editor-fold desc="用户账号密码登录">
-    @GetMapping("/password/challenge")
+    @GetMapping("/password")
     fun passwordChallenge(username: String): ResponseBase<LoginChallengeResponse> {
         val coreAuthEntity = coreAuthService.getByUsername(username)
-        var saltHex = ""
-        var verifierHex = ""
+        var saltHex: String
+        var verifierHex: String
         var saveSessionId = false
         if (coreAuthEntity != null) {
             saltHex = coreAuthEntity.srpSalt ?: return ResponseBase(500, "用户数据异常，请联系管理员")
@@ -120,9 +129,9 @@ class AuthController(
         return ResponseBase( LoginChallengeResponse(sessionId, saltHex, b.toString(16)))
     }
 
-    @PostMapping("/password/verify")
+    @PostMapping("/password")
     fun passwordVerify(@RequestBody request: LoginVerifyRequest): ResponseBase<LoginVerifyResponse> {
-        var serverSession: SRP6ServerSession? = null
+        var serverSession: SRP6ServerSession?
         try {
             serverSession = objectRedisTemplate.opsForValue().get("srp:session:${request.sessionId}") as? SRP6ServerSession
         } catch (_: Exception) {
@@ -169,8 +178,103 @@ class AuthController(
     }
     // </editor-fold>
 
-    // <editor-fold desc="GitHub OAuth登录">
-    // TODO
+    // <editor-fold desc="GitHub OAuth">
+    @GetMapping("/github")
+    fun githubOAuth(response: HttpServletResponse): ResponseBase<String> {
+        val clientId = siteProperities.githubClientId
+        val redirectUri = "https://${siteProperities.domain}/github-callback"
+        val state = UUID.randomUUID().toString()
+        // 将 state 存储在 Redis 中，设置过期时间为 10 分钟
+        objectRedisTemplate.opsForValue().set("oauth:github:state:$state", EnumOauthUsage.LOGIN, Duration.ofMinutes(10))
+        val oauthUrl = UrlBuilder.of("https://github.com/login/oauth/authorize")
+            .addQuery("client_id", clientId)
+            .addQuery("redirect_uri", redirectUri)
+            .addQuery("state", state)
+            .addQuery("scope", "user")
+            .build()
+        response.sendRedirect(oauthUrl)
+        return ResponseBase(200, "OK")
+    }
+
+    @GetMapping("/github/state")
+    fun getStateUsage(state: String): ResponseBase<String> {
+        return ResponseBase(if ((objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage
+                ?: return ResponseBase(400, "无效的 state")) == EnumOauthUsage.LOGIN) "login" else "bind")
+    }
+
+    @GetMapping("/github/login")
+    fun processLoginState(code: String, state: String): ResponseBase<String> {
+        val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
+        objectRedisTemplate.delete("oauth:github:state:$state")
+        if (storedState != EnumOauthUsage.LOGIN) {
+            return ResponseBase(400, "无效的 state")
+        }
+        val accessToken = try {
+            getGithubAccessToken(code)
+        } catch (_: Exception) {
+            return ResponseBase(500, "获取 GitHub 访问令牌失败")
+        }
+        val githubUserId = try {
+            getGithubUserId(accessToken)
+        } catch (_: Exception) {
+            return ResponseBase(500, "获取 GitHub 用户信息失败")
+        }
+        val userId = userOauthService.getUserIdByGithubId(githubUserId) ?: return ResponseBase(400, "该 GitHub 账号未绑定账号")
+        val jwtToken = jwtTokenComponent.generateLoginSession(userId)
+        return ResponseBase(jwtToken)
+    }
+
+    @GetMapping("/github/bind")
+    fun processBindState(code: String, state: String, @CurrentUserId userId: Int?): ResponseBase<String> {
+        val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
+        objectRedisTemplate.delete("oauth:github:state:$state")
+        if (storedState != EnumOauthUsage.BIND) {
+            return ResponseBase(400, "无效的 state")
+        }
+        if (userId == null) {
+            return ResponseBase(401, "请先登录")
+        }
+        val accessToken = try {
+            getGithubAccessToken(code)
+        } catch (_: Exception) {
+            return ResponseBase(500, "获取 GitHub 访问令牌失败")
+        }
+        val githubUserId = try {
+            getGithubUserId(accessToken)
+        } catch (_: Exception) {
+            return ResponseBase(500, "获取 GitHub 用户信息失败")
+        }
+        if (userOauthService.getUserIdByGithubId(githubUserId) != null) {
+            return ResponseBase(400, "该 GitHub 账号已绑定账号")
+        }
+        userOauthService.setGithubId(userId, githubUserId)
+        return ResponseBase(200, "OK")
+    }
+
+    private fun getGithubAccessToken(code: String?): String? {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create("https://github.com/login/oauth/access_token"))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("{\"client_id\":\"" + siteProperities.githubClientId + "\",\"client_secret\":\"" + siteProperities.githubClientSecret + "\",\"code\":\"" + code + "\"}"))
+            .build()
+        val client = HttpClient.newHttpClient()
+        val res = client.send(request, HttpResponse.BodyHandlers.ofString())
+        val json = JSONObject(res.body())
+        return json.getStr("access_token")
+    }
+
+    private fun getGithubUserId(accessToken: String?): String {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create("https://api.github.com/user"))
+            .header("Accept", "application/json")
+            .header("Authorization", "Bearer $accessToken")
+            .build()
+        val client = HttpClient.newHttpClient()
+        val res = client.send(request, HttpResponse.BodyHandlers.ofString())
+        val json = JSONObject(res.body())
+        return json.getLong("id").toString()
+    }
     // </editor-fold>
 
     // <editor-fold desc="校验器">
