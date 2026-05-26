@@ -5,5 +5,4 @@ import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import org.apache.ibatis.annotations.Mapper
 
 @Mapper
-interface CoinTokenMapper : BaseMapper<CoinToken> {
-}
+interface CoinTokenMapper : BaseMapper<CoinToken>

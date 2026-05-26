@@ -5,5 +5,4 @@ import ltd.guimc.web.altget.entity.db.user.UserOauth
 import org.apache.ibatis.annotations.Mapper
 
 @Mapper
-interface UserOauthMapper : BaseMapper<UserOauth> {
-}
+interface UserOauthMapper : BaseMapper<UserOauth>

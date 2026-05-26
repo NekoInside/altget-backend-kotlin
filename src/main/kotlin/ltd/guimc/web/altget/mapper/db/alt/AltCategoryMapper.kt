@@ -5,5 +5,4 @@ import ltd.guimc.web.altget.entity.db.alt.AltCategory
 import org.apache.ibatis.annotations.Mapper
 
 @Mapper
-interface AltCategoryMapper : BaseMapper<AltCategory> {
-}
+interface AltCategoryMapper : BaseMapper<AltCategory>

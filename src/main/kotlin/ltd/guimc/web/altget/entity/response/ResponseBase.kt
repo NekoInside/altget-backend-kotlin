@@ -1,6 +1,6 @@
 package ltd.guimc.web.altget.entity.response
 
-class ResponseBase<T>(
+data class ResponseBase<T>(
     val code: Int,
     val message: String,
     val data: T? = null

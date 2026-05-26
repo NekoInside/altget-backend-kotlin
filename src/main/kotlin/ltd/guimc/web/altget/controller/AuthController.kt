@@ -12,6 +12,7 @@ import ltd.guimc.web.altget.component.JwtTokenComponent
 import ltd.guimc.web.altget.config.SiteProperities
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.entity.db.user.CoreAuth
+import ltd.guimc.web.altget.entity.db.user.UserDetails
 import ltd.guimc.web.altget.entity.db.user.UserOauth
 import ltd.guimc.web.altget.entity.request.auth.LoginVerifyRequest
 import ltd.guimc.web.altget.entity.request.auth.RegisterRequest
@@ -21,6 +22,7 @@ import ltd.guimc.web.altget.entity.response.auth.LoginVerifyResponse
 import ltd.guimc.web.altget.enum.EnumOauthUsage
 import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.user.CoreAuthService
+import ltd.guimc.web.altget.service.user.UserDetailsService
 import ltd.guimc.web.altget.service.user.UserOauthService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.data.redis.core.RedisTemplate
@@ -48,7 +50,8 @@ class AuthController(
     private val userOauthService: UserOauthService,
     private val userCoinService: UserCoinService,
     @Qualifier("objectRedisTemplate")
-    private val objectRedisTemplate: RedisTemplate<String, Any>
+    private val objectRedisTemplate: RedisTemplate<String, Any>,
+    private val userDetailsService: UserDetailsService
 ) {
     // <editor-fold desc="用户注册">
     @PostMapping("/register")
@@ -65,31 +68,34 @@ class AuthController(
         if (coreAuthService.getByUsername(request.username) != null ||
             coreAuthService.getByEmail(request.email) != null) {
             Thread.sleep(3000)
-            return ResponseBase(200, "若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
+            return ResponseBase("若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
         }
         // 初始化数据库值
-        val coreAuthEntity = CoreAuth()
-        coreAuthEntity.email = request.email
-        coreAuthEntity.username = request.username
-        coreAuthEntity.srpSalt = request.salt
-        coreAuthEntity.srpVerifier = request.verifier
-        coreAuthService.save(coreAuthEntity)
+        coreAuthService.save(CoreAuth().apply {
+            email = request.email
+            username = request.username
+            srpSalt = request.salt
+            srpVerifier = request.verifier
+        })
         // 重新获取 CoreAuth 示例以获取 ID
         val savedCoreAuth =
             coreAuthService.getByUsername(request.username) ?: return ResponseBase(500, "用户注册失败，请稍后再试")
         // 理论上来说不应该失败 除非数据库掉了
-        val userOauth = UserOauth()
-        userOauth.userId = savedCoreAuth.userId
-        userOauthService.save(userOauth)
-        val userCoin = UserCoin()
-        userCoin.userId = savedCoreAuth.userId
-        userCoin.balance = 0
-        userCoinService.save(userCoin)
+        userOauthService.save(UserOauth().apply {
+            userId = savedCoreAuth.userId
+        })
+        userCoinService.save(UserCoin().apply {
+            userId = savedCoreAuth.userId
+            balance = 0
+        })
+        userDetailsService.save(UserDetails().apply {
+            userId = savedCoreAuth.userId
+        })
         // 前面的步骤都成功了 说明用户注册成功了 现在需要发送验证邮件
         val token = jwtTokenComponent.getEmailFromToken(request.email)
         val fullActiveUrl = "https://" + siteProperities.domain + "/activate?token=" + URLEncoder.encode(token, "UTF-8")
         emailComponent.sendActivationEmail(request.email, request.username, fullActiveUrl)
-        return ResponseBase(200, "若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
+        return ResponseBase("若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
     }
     // </editor-fold>
 

@@ -5,5 +5,4 @@ import ltd.guimc.web.altget.entity.db.convert.ConvertTask
 import org.apache.ibatis.annotations.Mapper
 
 @Mapper
-interface ConvertTaskMapper : BaseMapper<ConvertTask> {
-}
+interface ConvertTaskMapper : BaseMapper<ConvertTask>
