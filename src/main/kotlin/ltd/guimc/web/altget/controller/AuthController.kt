@@ -20,10 +20,12 @@ import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.auth.LoginChallengeResponse
 import ltd.guimc.web.altget.entity.response.auth.LoginVerifyResponse
 import ltd.guimc.web.altget.enum.EnumOauthUsage
+import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserDetailsService
 import ltd.guimc.web.altget.service.user.UserOauthService
+import ltd.guimc.web.altget.service.user.UserOperationService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.web.bind.annotation.GetMapping
@@ -51,7 +53,8 @@ class AuthController(
     private val userCoinService: UserCoinService,
     @Qualifier("objectRedisTemplate")
     private val objectRedisTemplate: RedisTemplate<String, Any>,
-    private val userDetailsService: UserDetailsService
+    private val userDetailsService: UserDetailsService,
+    private val userOperationService: UserOperationService
 ) {
     // <editor-fold desc="用户注册">
     @PostMapping("/register")
@@ -156,6 +159,7 @@ class AuthController(
             val username = serverSession.getUserID().toIntOrNull() ?: return ResponseBase(400, "服务器 SRP Session 异常")
             val coreAuthEntity = coreAuthService.getByUsername(username.toString()) ?: return ResponseBase(400, "服务器 SRP Session 异常")
             val jwtToken = jwtTokenComponent.generateLoginSession(coreAuthEntity.userId)
+            userOperationService.log(coreAuthEntity.userId, EnumUserOperation.LOGIN, "账号密码登录")
             return ResponseBase(LoginVerifyResponse(m2.toString(16), jwtToken))
         } catch (_: Exception) {
             return ResponseBase(400, "用户名或密码错误")
@@ -227,6 +231,7 @@ class AuthController(
         }
         val userId = userOauthService.getUserIdByGithubId(githubUserId) ?: return ResponseBase(400, "该 GitHub 账号未绑定账号")
         val jwtToken = jwtTokenComponent.generateLoginSession(userId)
+        userOperationService.log(userId, EnumUserOperation.LOGIN, "Github OAuth 登录")
         return ResponseBase(jwtToken)
     }
 
@@ -254,6 +259,7 @@ class AuthController(
             return ResponseBase(400, "该 GitHub 账号已绑定账号")
         }
         userOauthService.setGithubId(userId, githubUserId)
+        userOperationService.log(userId, EnumUserOperation.OAUTH_BIND, "Github OAuth 绑定")
         return ResponseBase(200, "OK")
     }
 
