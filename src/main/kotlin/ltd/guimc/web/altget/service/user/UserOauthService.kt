@@ -28,4 +28,26 @@ class UserOauthService : ServiceImpl<UserOauthMapper, UserOauth>() {
             updateById(userOauth)
         }
     }
+
+    fun getUserIdByDiscordId(discordId: String): Int? {
+        val userOauth = query()
+            .eq("discord_id", discordId)
+            .one()
+        return userOauth?.userId
+    }
+
+    fun setDiscordId(userId: Int, discordId: String) {
+        val userOauth = query()
+            .eq("user_id", userId)
+            .one()
+        if (userOauth == null) {
+            save(UserOauth().apply {
+                this.userId = userId
+                this.discordId = discordId
+            })
+        } else {
+            userOauth.discordId = discordId
+            updateById(userOauth)
+        }
+    }
 }

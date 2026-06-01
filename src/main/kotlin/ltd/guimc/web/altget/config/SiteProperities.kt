@@ -9,5 +9,7 @@ data class SiteProperities(
     val fakeAccountSalt: String = "default_salt_value",
     val srpSessionTtl: Int = 60,
     val githubClientId: String = "",
-    val githubClientSecret: String = ""
+    val githubClientSecret: String = "",
+    val discordClientId: String = "",
+    val discordClientSecret: String = ""
 )
