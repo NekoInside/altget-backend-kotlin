@@ -6,10 +6,11 @@ import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
 
 @Component
-class AuthInterceptor(private val jwtTokenComponent: JwtTokenComponent) : HandlerInterceptor {
+class Interceptor(private val jwtTokenComponent: JwtTokenComponent) : HandlerInterceptor {
 
     companion object {
         const val USER_ID_ATTRIBUTE = "USER_ID_ATTRIBUTE"
+        const val REAL_IP_ATTRIBUTE = "REAL_IP_ATTRIBUTE"
     }
 
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
@@ -22,8 +23,10 @@ class AuthInterceptor(private val jwtTokenComponent: JwtTokenComponent) : Handle
             }
         }
 
+        // we're currently not using CDN, so we can directly get the real IP from the request
+        val realIp = request.remoteAddr
+        request.setAttribute(REAL_IP_ATTRIBUTE, realIp)
+
         return true
     }
-
-
 }

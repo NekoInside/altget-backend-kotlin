@@ -1,6 +1,6 @@
 package ltd.guimc.web.altget.component
 
-import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.annotations.RealIP
 import org.springframework.core.MethodParameter
 import org.springframework.stereotype.Component
 import org.springframework.web.bind.support.WebDataBinderFactory
@@ -10,10 +10,9 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.method.support.ModelAndViewContainer
 
 @Component
-class CurrentUserIdArgumentResolver : HandlerMethodArgumentResolver {
-
+class RealIPArgumentResolver : HandlerMethodArgumentResolver {
     override fun supportsParameter(parameter: MethodParameter): Boolean {
-        return parameter.hasParameterAnnotation(CurrentUserId::class.java)
+        return parameter.hasParameterAnnotation(RealIP::class.java)
     }
 
     override fun resolveArgument(
@@ -23,7 +22,7 @@ class CurrentUserIdArgumentResolver : HandlerMethodArgumentResolver {
         binderFactory: WebDataBinderFactory?
     ): Any? {
         return webRequest.getAttribute(
-            Interceptor.USER_ID_ATTRIBUTE,
+            Interceptor.REAL_IP_ATTRIBUTE,
             RequestAttributes.SCOPE_REQUEST
         )
     }
