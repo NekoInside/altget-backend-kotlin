@@ -21,7 +21,7 @@ class SocialController(
     // <editor-fold desc="Discord">
     @GetMapping("/discord/redirect")
     fun discordRedirect(response: HttpServletResponse): ResponseBase<String> {
-        val encodedRedirectUri = URLEncoder.encode("https://${siteProperities.domain}/discord-callback")
+        val encodedRedirectUri = URLEncoder.encode("https://${siteProperities.domain}/discord-callback", Charsets.UTF_8)
         val url = UrlBuilder.of("https://discord.com/oauth2/authorize")
             .addQuery("client_id", siteProperities.discordClientId)
             .addQuery("redirect_uri", encodedRedirectUri)
@@ -41,7 +41,7 @@ class SocialController(
         if (userOauth != null && !userOauth.discordId.isNullOrBlank()) {
             return ResponseBase(400, "Already bound to a Discord account")
         }
-        if (code.isNullOrBlank()) {
+        if (code.isBlank()) {
             return ResponseBase(404, "Not authenticated")
         }
         try {
@@ -59,7 +59,6 @@ class SocialController(
         } catch (e: Exception) {
             return ResponseBase(500, "Failed to bind Discord account: ${e.message}")
         }
-        return ResponseBase("")
     }
     // </editor-fold>
 }

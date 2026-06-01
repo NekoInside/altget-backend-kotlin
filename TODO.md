@@ -1,0 +1,32 @@
+- [ ] Alt API
+	- [ ] Key fetch
+	- [x] Web fetch
+	- [ ] Post
+- [ ] Auth API
+	- [x] Register
+	- [x] Password login
+	- [ ] Passkey login
+	- [ ] Passkey register
+	- [x] GitHub login
+	- [x] GitHub bind
+- [ ] Admin API
+	- [ ] List users
+	- [ ] Get selected user info
+	- [ ] Ban/unban selected user
+	- [ ] Add/subtract selected user credit
+- [ ] Social API
+	- [x] Discord Bind
+	- [ ] Telegram Bind
+- [ ] Proof of Work API
+	- [ ] Create task
+- [ ] Coins API
+	- [ ] Redeem token
+	- [ ] Transfer credit
+- [ ] User API
+	- [ ] Get self information
+	- [ ] Get self operation log
+	- [ ] Get self user api key
+	- [ ] New user api key
+	- [ ] Rotate user api key
+- [ ] Other Util
+	- [ ] Operation logger

@@ -36,13 +36,13 @@ class PoWVerificationService {
             if (input.length > 629) return false
             
             // Validate difficulty
-            if (difficulty <= 0 || difficulty >= 64) return false
+            if (difficulty !in 1..<64) return false
             
             // Validate sign length
             if (sign.length != 64) return false
             
             // Validate nonce
-            if (nonce < 0 || nonce > 100000000) return false
+            if (nonce !in 0..100000000) return false
             
             // Parse sbox (first 128 hex chars)
             val sboxHex = input.substring(0, 128)
@@ -73,7 +73,7 @@ class PoWVerificationService {
             val target = "0".repeat(difficulty)
             return hash.startsWith(target)
             
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return false
         }
     }
@@ -167,7 +167,7 @@ class PoWVerificationService {
     private fun generateSign(nonce: Int, tireSeed: String): String {
         // Create input: nonce_str + tireSeed
         val tmp = "$nonce$tireSeed"
-        var sign = sha256Hex(tmp)
+        val sign = sha256Hex(tmp)
         
         // Apply uppercase transformations
         // For each position i (i != 0), if nonce % i == 0 and char is lowercase, convert to uppercase

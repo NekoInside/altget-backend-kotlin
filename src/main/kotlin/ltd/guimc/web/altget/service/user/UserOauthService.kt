@@ -50,4 +50,11 @@ class UserOauthService : ServiceImpl<UserOauthMapper, UserOauth>() {
             updateById(userOauth)
         }
     }
+
+    fun getDiscordIdByUserId(userId: Int): String? {
+        val userOauth = query()
+            .eq("user_id", userId)
+            .one()
+        return userOauth?.discordId
+    }
 }

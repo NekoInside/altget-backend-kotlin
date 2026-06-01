@@ -9,6 +9,8 @@ class UserDetails {
     @TableId
     var userId: Int? = null
 
+    var registerTime = LocalDateTime.now()
+
     var lastLoginTime: LocalDateTime = LocalDateTime.now()
 
     var lastLoginIp: String = ""

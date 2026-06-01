@@ -11,5 +11,8 @@ data class SiteProperities(
     val githubClientId: String = "",
     val githubClientSecret: String = "",
     val discordClientId: String = "",
-    val discordClientSecret: String = ""
+    val discordClientSecret: String = "",
+    val discordBotToken: String = "",
+    val discordChannelId: String = "",
+    val discordChannelSponsorRoleId: String = "",
 )
