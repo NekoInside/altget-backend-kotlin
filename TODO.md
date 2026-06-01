@@ -1,19 +1,19 @@
 - [ ] Alt API
 	- [ ] Key fetch
-	- [x] Web fetch
-	- [ ] Post
+	- [x] Web fetch \(PoW required\) \(Captcha required\)
+	- [ ] Post \(Auth required\)
 - [ ] Auth API
-	- [x] Register
+	- [x] Register \(Captcha required\)
 	- [x] Password login
 	- [ ] Passkey login
 	- [ ] Passkey register
 	- [x] GitHub login
 	- [x] GitHub bind
 - [ ] Admin API
-	- [ ] List users
-	- [ ] Get selected user info
-	- [ ] Ban/unban selected user
-	- [ ] Add/subtract selected user credit
+	- [ ] List users \(Role admin required\)
+	- [ ] Get selected user info \(Role admin required\)
+	- [ ] Ban/unban selected user \(Role admin required\)
+	- [ ] Add/subtract selected user credit \(Role admin required\)
 - [ ] Social API
 	- [x] Discord Bind
 	- [ ] Telegram Bind
@@ -22,11 +22,12 @@
 - [ ] Coins API
 	- [ ] Redeem token
 	- [ ] Transfer credit
+    - [ ] Generate token \(Role admin required\)
 - [ ] User API
 	- [ ] Get self information
 	- [ ] Get self operation log
 	- [ ] Get self user api key
-	- [ ] New user api key
-	- [ ] Rotate user api key
+	- [ ] New user api key \(PoW required\) \(Captcha required\)
+	- [ ] Rotate user api key \(PoW required\) \(Captcha required\)
 - [ ] Other Util
 	- [ ] Operation logger
