@@ -17,8 +17,8 @@
 - [ ] Social API
 	- [x] Discord Bind
 	- [ ] Telegram Bind
-- [ ] Proof of Work API
-	- [ ] Create task
+- [x] Proof of Work API
+	- [x] Create task
 - [ ] Coins API
 	- [ ] Redeem token
 	- [ ] Transfer credit
