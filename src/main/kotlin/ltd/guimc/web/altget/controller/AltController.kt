@@ -38,7 +38,7 @@ class AltController(
         if (!geetestVerifyComponent.verify(captchaRequest)) {
             return ResponseBase(400, "Captcha verification failed")
         }
-        if (!poWTaskService.validateTask(taskId, nonce)) {
+        if (!poWTaskService.validateTask(taskId, "fetch", nonce)) {
             return ResponseBase(400, "PoW validation failed")
         }
         if (!meetChannelRequirement(channel, userId)) {

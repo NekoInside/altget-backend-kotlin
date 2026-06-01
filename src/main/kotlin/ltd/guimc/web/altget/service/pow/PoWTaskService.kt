@@ -60,13 +60,14 @@ class PoWTaskService(private val poWVerificationService: PoWVerificationService)
         return hexString
     }
 
-    fun validateTask(taskId: String, result: String): Boolean {
+    fun validateTask(taskId: String, target: String, result: String): Boolean {
         if (!taskMap.containsKey(taskId)) return false
         try {
             val task = taskMap[taskId]
+            if (task == null || task.target != target) return false
             val sign = result.substring(0..63)
             val nonce = result.substring(64).toInt()
-            return poWVerificationService.verify(task!!.data, sign, nonce, task.difficulty)
+            return poWVerificationService.verify(task.data, sign, nonce, task.difficulty)
         } catch (_: Exception) {
             return false
         } finally {
