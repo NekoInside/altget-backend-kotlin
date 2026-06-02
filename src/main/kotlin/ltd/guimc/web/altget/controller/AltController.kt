@@ -56,7 +56,7 @@ class AltController(
         if (channel == "pre-processed") {
             if (userId == null) return false
             val userDetails = userDetailsService.getById(userId) ?: return false
-            val registerTime = userDetails.registerTime ?: LocalDateTime.now()
+            val registerTime = userDetails.registerTime
             val wantedRegisterTime = LocalDateTime.of(2026, 2, 23, 0, 0)
             return registerTime <= wantedRegisterTime || discordApiService.checkIsUserSponsor(userId)
         }

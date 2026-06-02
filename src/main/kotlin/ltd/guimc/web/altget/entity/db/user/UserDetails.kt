@@ -2,6 +2,7 @@ package ltd.guimc.web.altget.entity.db.user
 
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
+import ltd.guimc.web.altget.enum.EnumUserRole
 import java.time.LocalDateTime
 
 @TableName
@@ -9,7 +10,9 @@ class UserDetails {
     @TableId
     var userId: Int? = null
 
-    var registerTime = LocalDateTime.now()
+    var userRole: EnumUserRole = EnumUserRole.UNVERIFY
+
+    var registerTime: LocalDateTime = LocalDateTime.now()
 
     var lastLoginTime: LocalDateTime = LocalDateTime.now()
 

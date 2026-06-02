@@ -21,6 +21,7 @@ import ltd.guimc.web.altget.entity.response.auth.LoginChallengeResponse
 import ltd.guimc.web.altget.entity.response.auth.LoginVerifyResponse
 import ltd.guimc.web.altget.enum.EnumOauthUsage
 import ltd.guimc.web.altget.enum.EnumUserOperation
+import ltd.guimc.web.altget.enum.EnumUserRole
 import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserDetailsService
@@ -95,10 +96,22 @@ class AuthController(
             userId = savedCoreAuth.userId
         })
         // 前面的步骤都成功了 说明用户注册成功了 现在需要发送验证邮件
-        val token = jwtTokenComponent.getEmailFromToken(request.email)
+        val token = jwtTokenComponent.generateRegisterVerifyToken(request.email)
         val fullActiveUrl = "https://" + siteProperities.domain + "/activate?token=" + URLEncoder.encode(token, "UTF-8")
         emailComponent.sendActivationEmail(request.email, request.username, fullActiveUrl)
         return ResponseBase("若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
+    }
+
+    @GetMapping("/activate")
+    fun activate(code: String): ResponseBase<String> {
+        val email = jwtTokenComponent.getEmailFromToken(code) ?: return ResponseBase(400, "无效的激活链接")
+        val coreAuthEntity = coreAuthService.getByEmail(email) ?: return ResponseBase(400, "无效的激活链接")
+        val userDetails: UserDetails = userDetailsService.getById(coreAuthEntity.userId) ?: return ResponseBase(400, "无效的激活链接")
+        if (userDetails.userRole != EnumUserRole.UNVERIFY) return ResponseBase(400, "无效的激活链接")
+        userDetailsService.updateById(userDetails.apply {
+            userRole = EnumUserRole.VERIFY
+        })
+        return ResponseBase("账户激活成功，您现在可以使用账号密码登录了")
     }
     // </editor-fold>
 
@@ -158,6 +171,9 @@ class AuthController(
             val m2 = serverSession.step2(a, m1)
             val username = serverSession.getUserID().toIntOrNull() ?: return ResponseBase(400, "服务器 SRP Session 异常")
             val coreAuthEntity = coreAuthService.getByUsername(username.toString()) ?: return ResponseBase(400, "服务器 SRP Session 异常")
+            val userDetails = userDetailsService.getById(coreAuthEntity.userId) ?: return ResponseBase(400, "服务器 SRP Session 异常")
+            if (userDetails.userRole == EnumUserRole.UNVERIFY) return ResponseBase(400, "账号未激活，请先激活账号")
+            if (userDetails.userRole == EnumUserRole.BANNED) return ResponseBase(400, "账号已被封禁，请联系管理员")
             val jwtToken = jwtTokenComponent.generateLoginSession(coreAuthEntity.userId)
             userOperationService.log(coreAuthEntity.userId, EnumUserOperation.LOGIN, "账号密码登录")
             return ResponseBase(LoginVerifyResponse(m2.toString(16), jwtToken))
