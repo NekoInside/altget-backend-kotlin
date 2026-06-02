@@ -162,6 +162,15 @@ class AuthController(
         val coreAuth = coreAuthService.getByEmail(request.email)
         if (coreAuth != null) {
             val token = jwtTokenComponent.generatePasswordResetToken(request.email)
+            // 将重置唯一标识存入 Redis，实现有状态防重放
+            val resetId = jwtTokenComponent.getPasswordResetIdFromToken(token)
+            if (resetId != null) {
+                objectRedisTemplate.opsForValue().set(
+                    "password-reset:$resetId",
+                    coreAuth.userId.toString(),
+                    jwtTokenComponent.jwtProperties.registerVerifyTokenExpiration
+                )
+            }
             val resetUrl = "https://" + siteProperities.domain + "/reset-password?token=" + URLEncoder.encode(token, "UTF-8")
             emailComponent.sendPasswordResetEmail(request.email, coreAuth.username ?: "", resetUrl)
         }
@@ -173,11 +182,18 @@ class AuthController(
     @PostMapping("/reset-password")
     @Transactional
     fun resetPassword(@RequestBody request: ResetPasswordRequest): ResponseBase<String> {
-        val email = jwtTokenComponent.getEmailFromToken(request.token)
+        // 提取并校验防重放标识：每个 token 只能使用一次
+        val resetId = jwtTokenComponent.getPasswordResetIdFromToken(request.token)
             ?: return ResponseBase(400, "无效的重置链接")
+        val redisKey = "password-reset:$resetId"
+        val consumed = objectRedisTemplate.opsForValue().getAndDelete(redisKey)
+            ?: return ResponseBase(400, "重置链接已失效或已被使用")
+        // 验证 JWT 是否过期
         if (!jwtTokenComponent.isJWTVaild(request.token)) {
             return ResponseBase(400, "重置链接已过期")
         }
+        val email = jwtTokenComponent.getEmailFromToken(request.token)
+            ?: return ResponseBase(400, "无效的重置链接")
         val coreAuth = coreAuthService.getByEmail(email)
             ?: return ResponseBase(400, "无效的重置链接")
         coreAuthService.updateById(coreAuth.apply {

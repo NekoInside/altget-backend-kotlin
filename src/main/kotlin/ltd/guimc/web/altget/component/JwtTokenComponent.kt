@@ -44,16 +44,31 @@ class JwtTokenComponent(
         return jwtToken
     }
 
-    // 忘记密码验证 token
+    // 忘记密码验证 token（有状态：嵌入唯一 JWT ID 用于防重放）
     fun generatePasswordResetToken(email: String): String {
         val now = Date()
+        val resetId = UUID.randomUUID().toString()
         val jwtToken = JWT.create()
             .setKey(jwtProperties.secret.toByteArray())
             .setSubject(email)
+            .setJWTId(resetId)
             .setIssuedAt(now)
             .setExpiresAt(Date(now.time + jwtProperties.registerVerifyTokenExpiration.toMillis()))
             .sign()
         return jwtToken
+    }
+
+    // 从密码重置 token 中提取唯一重置 ID（用于防重放检查）
+    fun getPasswordResetIdFromToken(token: String): String? {
+        try {
+            if (!JWTUtil.verify(token, jwtProperties.secret.toByteArray())) {
+                return null
+            }
+            val jwt = JWTUtil.parseToken(token)
+            return jwt.getPayload(JWTPayload.JWT_ID) as? String
+        } catch (_: Exception) {
+        }
+        return null
     }
 
     // 验证 JWT 是否过期 / 是否用正确的 Key 签名
