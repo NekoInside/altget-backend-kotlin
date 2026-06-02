@@ -1,23 +1,209 @@
 package ltd.guimc.web.altget.controller
 
 import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import ltd.guimc.web.altget.entity.response.ResponseBase
+import ltd.guimc.web.altget.entity.response.user.SimpleUserInfo
 import ltd.guimc.web.altget.entity.response.user.UserInfo
+import ltd.guimc.web.altget.enum.EnumTransactionType
+import ltd.guimc.web.altget.enum.EnumUserOperation
+import ltd.guimc.web.altget.enum.EnumUserRole
+import ltd.guimc.web.altget.service.coin.CoinTokenService
+import ltd.guimc.web.altget.service.coin.CoinTransactionHistoryService
+import ltd.guimc.web.altget.service.coin.UserCoinService
+import ltd.guimc.web.altget.service.user.CoreAuthService
+import ltd.guimc.web.altget.service.user.UserApiService
+import ltd.guimc.web.altget.service.user.UserDetailsService
+import ltd.guimc.web.altget.service.user.UserOperationService
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController("/api/admin")
-class AdminController {
-    @GetMapping("/users")
-    fun listUsers(@CurrentUserId userId: Int?, size: Int, page: Int): ResponseBase<List<UserInfo>> {
-        // TODO
-        return ResponseBase(emptyList())
+class AdminController(
+    private val coreAuthService: CoreAuthService,
+    private val userDetailsService: UserDetailsService,
+    private val userApiService: UserApiService,
+    private val userCoinService: UserCoinService,
+    private val coinTokenService: CoinTokenService,
+    private val coinTransactionHistoryService: CoinTransactionHistoryService,
+    private val userOperationService: UserOperationService
+) {
+    // <editor-fold desc="Helper">
+    /**
+     * Returns null if the current user is an admin, otherwise returns an error ResponseBase.
+     */
+    private fun <T> requireAdmin(currentUserId: Int?): ResponseBase<T>? {
+        if (currentUserId == null) return ResponseBase(401, "Unauthorized")
+        val userDetails = userDetailsService.getById(currentUserId)
+            ?: return ResponseBase(401, "Unauthorized")
+        if (userDetails.userRole != EnumUserRole.ADMIN)
+            return ResponseBase(403, "Forbidden: Admin role required")
+        return null
     }
 
-    @GetMapping("/user/{userId}")
-    fun getUser(@PathVariable userId: Int?): ResponseBase<UserInfo> {
-        // TODO
-        return ResponseBase(500, "Not implemented yet")
+    /**
+     * Builds a [UserInfo] DTO from the composite data of [CoreAuth], [UserDetails], and [UserApi].
+     */
+    private fun buildUserInfo(userId: Int): UserInfo? {
+        val coreAuth = coreAuthService.getById(userId) ?: return null
+        val userDetails = userDetailsService.getById(userId) ?: return null
+        val userApi = userApiService.getById(userId) ?: return null
+        return UserInfo(
+            id = userId,
+            name = coreAuth.username ?: "",
+            email = coreAuth.email ?: "",
+            role = userDetails.userRole,
+            apiLimitLevel = userApi.limitLevel,
+            registrationTime = userDetails.registerTime.toString(),
+            lastLoginIp = userDetails.lastLoginIp,
+            lastLoginGeo = userDetails.lastLoginGeo,
+            lastLoginTime = userDetails.lastLoginTime.toString(),
+            totalAltFetched = userDetails.totalAltFetched,
+            dailyAltFetched = userDetails.dailyAltFetched,
+            totalWebFetched = userDetails.totalWebFetched,
+            dailyWebFetched = userDetails.dailyWebFetched,
+            totalUserApiFetched = userDetails.totalUserApiFetched,
+            dailyUserApiFetched = userDetails.dailyUserApiFetched,
+            totalPaidApiFetched = userDetails.totalPaidApiFetched,
+            dailyPaidApiFetched = userDetails.dailyPaidApiFetched
+        )
     }
+
+    /**
+     * Build a [SimpleUserInfo] DTO which only contains basic info for listing users, to optimize performance by avoiding unnecessary joins.
+     */
+    private fun buildSimpleUserInfo(userId: Int): SimpleUserInfo? {
+        val coreAuth = coreAuthService.getById(userId) ?: return null
+        val userDetails = userDetailsService.getById(userId) ?: return null
+        return SimpleUserInfo(
+            id = userId,
+            name = coreAuth.username ?: "",
+            email = coreAuth.email ?: "",
+            role = userDetails.userRole,
+        )
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="List Users">
+    @GetMapping("/users")
+    fun listUsers(@CurrentUserId userId: Int?, @RequestParam size: Int = 20, @RequestParam page: Int = 1): ResponseBase<List<SimpleUserInfo>> {
+        requireAdmin<List<SimpleUserInfo>>(userId)?.let { return it }
+        val pageResult = coreAuthService.getPage(page, size)
+        val userInfoList = pageResult.records.mapNotNull { coreAuth ->
+            buildSimpleUserInfo(coreAuth.userId)
+        }
+        return ResponseBase(userInfoList)
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Get User">
+    @GetMapping("/user/{targetUserId}")
+    fun getUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<UserInfo> {
+        requireAdmin<UserInfo>(userId)?.let { return it }
+        val userInfo = buildUserInfo(targetUserId)
+            ?: return ResponseBase(404, "User not found")
+        return ResponseBase(userInfo)
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Ban / Unban">
+    @PostMapping("/user/{targetUserId}/ban")
+    @Transactional
+    fun banUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<String> {
+        requireAdmin<String>(userId)?.let { return it }
+        val userDetails = userDetailsService.getById(targetUserId)
+            ?: return ResponseBase(404, "User not found")
+        if (userDetails.userRole == EnumUserRole.BANNED)
+            return ResponseBase(400, "User is already banned")
+        if (userDetails.userRole == EnumUserRole.ADMIN)
+            return ResponseBase(400, "Cannot ban an admin user")
+        userDetailsService.updateById(userDetails.apply {
+            userRole = EnumUserRole.BANNED
+        })
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_BAN, "Banned user $targetUserId")
+        return ResponseBase("User banned successfully")
+    }
+
+    @PostMapping("/user/{targetUserId}/unban")
+    @Transactional
+    fun unbanUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<String> {
+        requireAdmin<String>(userId)?.let { return it }
+        val userDetails = userDetailsService.getById(targetUserId)
+            ?: return ResponseBase(404, "User not found")
+        if (userDetails.userRole != EnumUserRole.BANNED)
+            return ResponseBase(400, "User is not banned")
+        userDetailsService.updateById(userDetails.apply {
+            userRole = EnumUserRole.VERIFY
+        })
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_UNBAN, "Unbanned user $targetUserId")
+        return ResponseBase("User unbanned successfully")
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Add / Subtract Credit">
+    @PostMapping("/user/{targetUserId}/credit/add")
+    @Transactional
+    fun addCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
+        requireAdmin<String>(userId)?.let { return it }
+        if (amount <= 0) return ResponseBase(400, "Amount must be positive")
+        val userCoin = userCoinService.getById(targetUserId)
+            ?: return ResponseBase(404, "User not found")
+        userCoinService.updateById(userCoin.apply {
+            balance += amount
+        })
+        coinTransactionHistoryService.logTransaction(
+            userId = targetUserId,
+            amount = amount,
+            type = EnumTransactionType.ADMIN_ADD
+        )
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_CREDIT_ADD, "Added $amount credits to user $targetUserId")
+        return ResponseBase("Successfully added $amount credits to user $targetUserId")
+    }
+
+    @PostMapping("/user/{targetUserId}/credit/subtract")
+    @Transactional
+    fun subtractCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
+        requireAdmin<String>(userId)?.let { return it }
+        if (amount <= 0) return ResponseBase(400, "Amount must be positive")
+        val userCoin = userCoinService.getById(targetUserId)
+            ?: return ResponseBase(404, "User not found")
+        if (userCoin.balance < amount)
+            return ResponseBase(400, "User does not have enough credits (balance: ${userCoin.balance})")
+        userCoinService.updateById(userCoin.apply {
+            balance -= amount
+        })
+        coinTransactionHistoryService.logTransaction(
+            userId = targetUserId,
+            amount = -amount,
+            type = EnumTransactionType.ADMIN_SUBTRACT
+        )
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_CREDIT_SUBTRACT, "Subtracted $amount credits from user $targetUserId")
+        return ResponseBase("Successfully subtracted $amount credits from user $targetUserId")
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Generate Tokens">
+    @PostMapping("/token/generate")
+    @Transactional
+    fun generateTokens(@CurrentUserId userId: Int?, @RequestParam tokenAmount: Int, @RequestParam coinAmount: Int): ResponseBase<List<String>> {
+        requireAdmin<List<String>>(userId)?.let { return it }
+        if (tokenAmount <= 0) return ResponseBase(400, "Token amount must be positive")
+        if (coinAmount <= 0) return ResponseBase(400, "Coin amount must be positive")
+        val tokens = (1..tokenAmount).map {
+            val token = CoinToken().apply {
+                this.coinAmount = coinAmount
+                this.createdBy = userId
+                this.isUsed = false
+            }
+            coinTokenService.save(token)
+            token.id
+        }
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_GENERATE, "Generated $tokenAmount tokens with $coinAmount coins each")
+        return ResponseBase(tokens)
+    }
+    // </editor-fold>
 }

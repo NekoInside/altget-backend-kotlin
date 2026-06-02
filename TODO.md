@@ -9,12 +9,12 @@
 	- [ ] Passkey register
 	- [x] GitHub login
 	- [x] GitHub bind
-- [ ] Admin API
-	- [ ] List users \(Role admin required\)
-	- [ ] Get selected user info \(Role admin required\)
-	- [ ] Ban/unban selected user \(Role admin required\)
-	- [ ] Add/subtract selected user credit \(Role admin required\)
-	- [ ] Generate token \(Role admin required\)
+- [x] Admin API
+	- [x] List users \(Role admin required\)
+	- [x] Get selected user info \(Role admin required\)
+	- [x] Ban/unban selected user \(Role admin required\)
+	- [x] Add/subtract selected user credit \(Role admin required\)
+	- [x] Generate token \(token amount, coin amount pre token) \(Role admin required\)
 - [ ] Social API
 	- [x] Discord Bind
 	- [ ] Telegram Bind
@@ -23,11 +23,11 @@
 - [ ] Coins API
 	- [x] Redeem token
 	- [x] Transfer credit
-- [ ] User API
-	- [ ] Get self information
-	- [ ] Get self operation log
-	- [ ] Get self user api key
-	- [ ] New user api key \(PoW required\) \(Captcha required\)
-	- [ ] Rotate user api key \(PoW required\) \(Captcha required\)
-- [ ] Other Util
-	- [ ] Operation logger
+- [x] User API
+	- [x] Get self information
+	- [x] Get self operation log
+	- [x] Get self user api key
+	- [x] New user api key \(PoW required\) \(Captcha required\)
+	- [x] Rotate user api key \(PoW required\) \(Captcha required\)
+- [x] Other Util
+	- [x] Operation logger
