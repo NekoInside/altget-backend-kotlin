@@ -6,9 +6,9 @@ import ltd.guimc.web.altget.service.pow.PoWTaskService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
-@RestController("/api/pow")
+@RestController
 class PoWController(private val poWTaskService: PoWTaskService) {
-    @GetMapping
+    @GetMapping("/api/pow")
     fun createNewPowTask(target: String, @RealIP realIp: String): ResponseBase<PoWTaskService.PoWTask> {
         return ResponseBase(poWTaskService.createTask(target, realIp))
     }

@@ -12,14 +12,14 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.net.URLEncoder
 
-@RestController("/api/social")
+@RestController
 class SocialController(
     private val siteProperities: SiteProperities,
     private val userOauthService: UserOauthService,
     private val discordApiService: DiscordApiService
 ) {
     // <editor-fold desc="Discord">
-    @GetMapping("/discord/redirect")
+    @GetMapping("/api/social/discord/redirect")
     fun discordRedirect(response: HttpServletResponse): ResponseBase<String> {
         val encodedRedirectUri = URLEncoder.encode("https://${siteProperities.domain}/discord-callback", Charsets.UTF_8)
         val url = UrlBuilder.of("https://discord.com/oauth2/authorize")
@@ -32,7 +32,7 @@ class SocialController(
         return ResponseBase("success")
     }
 
-    @GetMapping("/discord/token")
+    @GetMapping("/api/social/discord/token")
     fun diccordBind(@CurrentUserId userId: Int?, code: String): ResponseBase<String> {
         if (userId == null) {
             return ResponseBase(404, "Not authenticated")

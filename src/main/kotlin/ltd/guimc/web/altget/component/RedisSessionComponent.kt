@@ -7,7 +7,7 @@ import java.time.Duration
 
 @Component
 class RedisSessionComponent(
-    @Qualifier("objectRedisTemplate")
+    @Qualifier("customStringRedisTemplate")
     private val stringRedisTemplate: RedisTemplate<String, String>
 ) {
 

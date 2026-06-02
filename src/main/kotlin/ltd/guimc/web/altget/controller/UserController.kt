@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
-@RestController("/api/user")
+@RestController
 class UserController(
     private val coreAuthService: CoreAuthService,
     private val userDetailsService: UserDetailsService,
@@ -81,7 +81,7 @@ class UserController(
     // </editor-fold>
 
     // <editor-fold desc="Get Self Information">
-    @GetMapping("/self")
+    @GetMapping("/api/user/self")
     fun getSelf(@CurrentUserId userId: Int?): ResponseBase<UserInfo> {
         requireAuth<UserInfo>(userId)?.let { return it }
         val userInfo = buildUserInfo(userId!!)
@@ -91,7 +91,7 @@ class UserController(
     // </editor-fold>
 
     // <editor-fold desc="Get Self Operation Log">
-    @GetMapping("/self/operations")
+    @GetMapping("/api/user/self/operations")
     fun getSelfOperations(
         @CurrentUserId userId: Int?,
         @RequestParam(defaultValue = "1") page: Int,
@@ -114,7 +114,7 @@ class UserController(
     // </editor-fold>
 
     // <editor-fold desc="Get Self API Key Info">
-    @GetMapping("/self/api-key")
+    @GetMapping("/api/user/self/api-key")
     fun getSelfApiKey(@CurrentUserId userId: Int?): ResponseBase<UserApiKeyInfo> {
         requireAuth<UserApiKeyInfo>(userId)?.let { return it }
         val userApi = userApiService.getById(userId!!)
@@ -127,7 +127,7 @@ class UserController(
     // </editor-fold>
 
     // <editor-fold desc="New User API Key">
-    @PostMapping("/self/api-key/new")
+    @PostMapping("/api/user/self/api-key/new")
     @Transactional
     fun newApiKey(@CurrentUserId userId: Int?, @RequestBody request: ApiKeyRequest): ResponseBase<UserApiKeyInfo> {
         requireAuth<UserApiKeyInfo>(userId)?.let { return it }
@@ -156,7 +156,7 @@ class UserController(
     // </editor-fold>
 
     // <editor-fold desc="Rotate User API Key">
-    @PostMapping("/self/api-key/rotate")
+    @PostMapping("/api/user/self/api-key/rotate")
     @Transactional
     fun rotateApiKey(@CurrentUserId userId: Int?, @RequestBody request: ApiKeyRequest): ResponseBase<UserApiKeyInfo> {
         requireAuth<UserApiKeyInfo>(userId)?.let { return it }

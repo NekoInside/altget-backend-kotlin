@@ -8,13 +8,13 @@ import ltd.guimc.web.altget.service.user.CoreAuthService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
-@RestController("/api/coins")
+@RestController
 class CoinController(
     private val userCoinService: UserCoinService,
     private val coreAuthService: CoreAuthService,
     private val coinTokenService: CoinTokenService
 ) {
-    @GetMapping("/transfer")
+    @GetMapping("/api/coins/transfer")
     fun transfer(@CurrentUserId userId: Int?, targetUserName: String, credits: Int): ResponseBase<String> {
         if (userId == null) return ResponseBase(401, "Unauthorized")
         val userCoin = userCoinService.getById(userId)
@@ -24,7 +24,7 @@ class CoinController(
         return ResponseBase("Transfer successful")
     }
 
-    @GetMapping("/redeem")
+    @GetMapping("/api/coins/redeem")
     fun redeem(@CurrentUserId userId: Int?, token: String): ResponseBase<String> {
         if (userId == null) return ResponseBase(401, "Unauthorized")
         val coinToken = coinTokenService.getById(token) ?: return ResponseBase(401, "No valid token found")

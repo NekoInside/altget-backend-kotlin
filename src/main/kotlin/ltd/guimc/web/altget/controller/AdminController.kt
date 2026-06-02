@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
-@RestController("/api/admin")
+@RestController
 class AdminController(
     private val coreAuthService: CoreAuthService,
     private val userDetailsService: UserDetailsService,
@@ -98,7 +98,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="List Users">
-    @GetMapping("/users")
+    @GetMapping("/api/admin/users")
     fun listUsers(@CurrentUserId userId: Int?, @RequestParam size: Int = 20, @RequestParam page: Int = 1): ResponseBase<PageResponse<SimpleUserInfo>> {
         requireAdmin<PageResponse<SimpleUserInfo>>(userId)?.let { return it }
         val pageResult = coreAuthService.getPage(page, size)
@@ -116,7 +116,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="Get User">
-    @GetMapping("/user/{targetUserId}")
+    @GetMapping("/api/admin/user/{targetUserId}")
     fun getUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<UserInfo> {
         requireAdmin<UserInfo>(userId)?.let { return it }
         val userInfo = buildUserInfo(targetUserId)
@@ -126,7 +126,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="Ban / Unban">
-    @PostMapping("/user/{targetUserId}/ban")
+    @PostMapping("/api/admin/user/{targetUserId}/ban")
     @Transactional
     fun banUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
@@ -143,7 +143,7 @@ class AdminController(
         return ResponseBase("User banned successfully")
     }
 
-    @PostMapping("/user/{targetUserId}/unban")
+    @PostMapping("/api/admin/user/{targetUserId}/unban")
     @Transactional
     fun unbanUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
@@ -160,7 +160,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="Add / Subtract Credit">
-    @PostMapping("/user/{targetUserId}/credit/add")
+    @PostMapping("/api/admin/user/{targetUserId}/credit/add")
     @Transactional
     fun addCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
@@ -179,7 +179,7 @@ class AdminController(
         return ResponseBase("Successfully added $amount credits to user $targetUserId")
     }
 
-    @PostMapping("/user/{targetUserId}/credit/subtract")
+    @PostMapping("/api/admin/user/{targetUserId}/credit/subtract")
     @Transactional
     fun subtractCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
@@ -202,7 +202,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="Generate Tokens">
-    @PostMapping("/token/generate")
+    @PostMapping("/api/admin/token/generate")
     @Transactional
     fun generateTokens(@CurrentUserId userId: Int?, @RequestParam tokenAmount: Int, @RequestParam coinAmount: Int): ResponseBase<List<String>> {
         requireAdmin<List<String>>(userId)?.let { return it }
@@ -223,7 +223,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="List Tokens">
-    @GetMapping("/tokens")
+    @GetMapping("/api/admin/tokens")
     fun listTokens(
         @CurrentUserId userId: Int?,
         @RequestParam(defaultValue = "1") page: Int,
@@ -253,7 +253,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="Remove Token">
-    @PostMapping("/token/{tokenId}/remove")
+    @PostMapping("/api/admin/token/{tokenId}/remove")
     @Transactional
     fun removeToken(@CurrentUserId userId: Int?, @PathVariable tokenId: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
@@ -266,7 +266,7 @@ class AdminController(
     // </editor-fold>
 
     // <editor-fold desc="List Operation Log">
-    @GetMapping("/operations")
+    @GetMapping("/api/admin/operations")
     fun listOperations(
         @CurrentUserId userId: Int?,
         @RequestParam(defaultValue = "1") page: Int,
@@ -314,7 +314,7 @@ class AdminController(
      * @param endTime   Optional end of time range (ISO-8601, e.g. "2026-06-02T00:00:00")
      * @return List of hourly consumption records
      */
-    @GetMapping("/alt-consumption")
+    @GetMapping("/api/admin/alt-consumption")
     fun getAltConsumption(
         @CurrentUserId userId: Int?,
         @RequestParam(required = false) channel: String?,

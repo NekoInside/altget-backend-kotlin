@@ -76,7 +76,7 @@ import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
 
-@RestController("/api/auth")
+@RestController
 class AuthController(
     private val geetestVerifyComponent: GeetestVerifyComponent,
     private val emailComponent: EmailComponent,
@@ -96,7 +96,7 @@ class AuthController(
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
     // <editor-fold desc="用户注册">
-    @PostMapping("/register")
+    @PostMapping("/api/auth/register")
     fun register(@RequestBody request: RegisterRequest): ResponseBase<String> {
         if (!geetestVerifyComponent.verify(request)) {
             return ResponseBase(400, "人机验证校验失败")
@@ -140,7 +140,7 @@ class AuthController(
         return ResponseBase("若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
     }
 
-    @GetMapping("/activate")
+    @GetMapping("/api/auth/activate")
     fun activate(code: String): ResponseBase<String> {
         val email = jwtTokenComponent.getEmailFromToken(code) ?: return ResponseBase(400, "无效的激活链接")
         val coreAuthEntity = coreAuthService.getByEmail(email) ?: return ResponseBase(400, "无效的激活链接")
@@ -154,13 +154,10 @@ class AuthController(
     // </editor-fold>
 
     // <editor-fold desc="忘记密码">
-    @PostMapping("/forgot-password")
+    @PostMapping("/api/auth/forgot-password")
     fun forgotPassword(@RequestBody request: ForgotPasswordRequest): ResponseBase<String> {
         if (!geetestVerifyComponent.verify(request)) {
             return ResponseBase(400, "人机验证校验失败")
-        }
-        if (!isValidEmail(request.email)) {
-            return ResponseBase(400, "邮箱格式不正确")
         }
         val coreAuth = coreAuthService.getByEmail(request.email)
         if (coreAuth != null) {
@@ -182,7 +179,7 @@ class AuthController(
         return ResponseBase("若该邮箱已注册，我们将发送一封密码重置邮件到该邮箱，请注意查收")
     }
 
-    @PostMapping("/reset-password")
+    @PostMapping("/api/auth/reset-password")
     @Transactional
     fun resetPassword(@RequestBody request: ResetPasswordRequest): ResponseBase<String> {
         // 提取并校验防重放标识：每个 token 只能使用一次
@@ -209,7 +206,7 @@ class AuthController(
     // </editor-fold>
 
     // <editor-fold desc="用户账号密码登录">
-    @GetMapping("/password/challenge")
+    @GetMapping("/api/auth/password/challenge")
     fun passwordChallenge(username: String): ResponseBase<LoginChallengeResponse> {
         val coreAuthEntity = coreAuthService.getByUsername(username)
         var saltHex: String
@@ -244,7 +241,7 @@ class AuthController(
         return ResponseBase( LoginChallengeResponse(sessionId, saltHex, b.toString(16)))
     }
 
-    @PostMapping("/password/token")
+    @PostMapping("/api/auth/password/token")
     fun passwordVerify(@RequestBody request: LoginVerifyRequest, @RealIP ip: String?): ResponseBase<LoginVerifyResponse> {
         var serverSession: SRP6ServerSession?
         try {
@@ -303,7 +300,7 @@ class AuthController(
     // </editor-fold>
 
     // <editor-fold desc="GitHub OAuth">
-    @GetMapping("/github")
+    @GetMapping("/api/auth/github")
     fun githubOAuth(response: HttpServletResponse, usage: String?): ResponseBase<String> {
         val clientId = siteProperities.githubClientId
         val redirectUri = "https://${siteProperities.domain}/github-callback"
@@ -321,13 +318,13 @@ class AuthController(
         return ResponseBase(200, "OK")
     }
 
-    @GetMapping("/github/state")
+    @GetMapping("/api/auth/github/state")
     fun getStateUsage(state: String): ResponseBase<String> {
         return ResponseBase(if ((objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage
                 ?: return ResponseBase(400, "无效的 state")) == EnumOauthUsage.LOGIN) "login" else "bind")
     }
 
-    @GetMapping("/github/login")
+    @GetMapping("/api/auth/github/login")
     fun processLoginState(code: String, state: String, @RealIP ip: String?): ResponseBase<String> {
         val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
         objectRedisTemplate.delete("oauth:github:state:$state")
@@ -358,7 +355,7 @@ class AuthController(
         return ResponseBase(jwtToken)
     }
 
-    @GetMapping("/github/bind")
+    @GetMapping("/api/auth/github/bind")
     fun processBindState(code: String, state: String, @CurrentUserId userId: Int?): ResponseBase<String> {
         val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
         objectRedisTemplate.delete("oauth:github:state:$state")
@@ -420,7 +417,7 @@ class AuthController(
         return null
     }
 
-    @PostMapping("/passkey/register/options")
+    @PostMapping("/api/auth/passkey/register/options")
     fun passkeyRegisterOptions(
         @CurrentUserId userId: Int?
     ): ResponseBase<PasskeyOptionsResponse> {
@@ -473,7 +470,7 @@ class AuthController(
         }
     }
 
-    @PostMapping("/passkey/register/verify")
+    @PostMapping("/api/auth/passkey/register/verify")
     fun passkeyRegisterVerify(
         @CurrentUserId userId: Int?,
         @RequestBody request: PasskeyRegisterVerifyRequest
@@ -518,7 +515,7 @@ class AuthController(
         }
     }
 
-    @PostMapping("/passkey/login/options")
+    @PostMapping("/api/auth/passkey/login/options")
     fun passkeyLoginOptions(
         @RequestBody(required = false) request: PasskeyLoginOptionsRequest?
     ): ResponseBase<PasskeyOptionsResponse> {
@@ -550,7 +547,7 @@ class AuthController(
         }
     }
 
-    @PostMapping("/passkey/login/verify")
+    @PostMapping("/api/auth/passkey/login/verify")
     fun passkeyLoginVerify(
         @RequestBody request: PasskeyLoginVerifyRequest,
         @RealIP ip: String?
@@ -616,7 +613,7 @@ class AuthController(
         }
     }
 
-    @GetMapping("/passkey/list")
+    @GetMapping("/api/auth/passkey/list")
     fun passkeyList(
         @CurrentUserId userId: Int?
     ): ResponseBase<List<PasskeyCredentialResponse>> {
@@ -633,7 +630,7 @@ class AuthController(
         return ResponseBase(result)
     }
 
-    @DeleteMapping("/passkey/{id}")
+    @DeleteMapping("/api/auth/passkey/{id}")
     fun passkeyDelete(
         @PathVariable id: Int,
         @CurrentUserId userId: Int?

@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDateTime
 
-@RestController("/api/alt")
+@RestController
 class AltController(
     private val geetestVerifyComponent: GeetestVerifyComponent,
     private val poWTaskService: PoWTaskService,
@@ -34,7 +34,7 @@ class AltController(
     private val userOperationService: UserOperationService,
     private val geolocationService: GeolocationService
 ) {
-    @GetMapping(params = ["userApiKey"])
+    @GetMapping("/api/alt", params = ["userApiKey"])
     fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1): ResponseBase<List<String>> {
         if (!paid && count != 1) return ResponseBase(400, "Not allowed")
         if (count <= 0) return ResponseBase(400, "Invalid count wanted")
@@ -77,7 +77,7 @@ class AltController(
         return ResponseBase(mutableListOf("${data[0].username}----${data[0].password}"))
     }
 
-    @GetMapping(params = ["!userApiKey"])
+    @GetMapping("/api/alt", params = ["!userApiKey"])
     fun webFetch(captchaId: String, captchaOutput: String, genTime: String, lotNumber: String, passToken: String, // captcha
                  taskId: String, nonce: String, // PoW
                  channel: String = "default",
