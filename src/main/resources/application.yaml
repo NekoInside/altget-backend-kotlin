@@ -63,3 +63,7 @@ site:
   domain: localhost:8080
   fake-account-salt: default_salt_value
   srp-session-ttl: 60
+
+webauthn:
+  rp-id: localhost
+  rp-name: Altget

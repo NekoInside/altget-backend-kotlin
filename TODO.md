@@ -2,11 +2,11 @@
 	- [x] Key fetch
 	- [x] Web fetch \(PoW required\) \(Captcha required\)
 	- [ ] Post \(Auth required\)
-- [ ] Auth API
+- [x] Auth API
 	- [x] Register \(Captcha required\)
 	- [x] Password login
-	- [ ] Passkey login
-	- [ ] Passkey register
+	- [x] Passkey login
+	- [x] Passkey register
 	- [x] GitHub login
 	- [x] GitHub bind
 - [x] Admin API
@@ -15,12 +15,11 @@
 	- [x] Ban/unban selected user \(Role admin required\)
 	- [x] Add/subtract selected user credit \(Role admin required\)
 	- [x] Generate token \(token amount, coin amount pre token) \(Role admin required\)
-- [ ] Social API
+- [x] Social API
 	- [x] Discord Bind
-	- [ ] Telegram Bind
 - [x] Proof of Work API
 	- [x] Create task
-- [ ] Coins API
+- [x] Coins API
 	- [x] Redeem token
 	- [x] Transfer credit
 - [x] User API

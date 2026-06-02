@@ -33,6 +33,7 @@ dependencies {
     implementation(libs.mybatis.plus.jsqlparser)
     implementation(libs.spring.security.webauthn)
     implementation(libs.jackson.module.kotlin)
+    implementation(libs.yubico.webauthn.server.core)
     implementation(libs.srp6a)
     implementation(libs.hutool)
     runtimeOnly(libs.mariadb.java.client)

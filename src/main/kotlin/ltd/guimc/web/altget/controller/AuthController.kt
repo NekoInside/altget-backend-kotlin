@@ -4,6 +4,22 @@ import cn.hutool.core.net.url.UrlBuilder
 import cn.hutool.json.JSONObject
 import com.nimbusds.srp6.SRP6CryptoParams
 import com.nimbusds.srp6.SRP6ServerSession
+import com.yubico.webauthn.AssertionRequest
+import com.yubico.webauthn.AssertionResult
+import com.yubico.webauthn.FinishAssertionOptions
+import com.yubico.webauthn.FinishRegistrationOptions
+import com.yubico.webauthn.RegistrationResult
+import com.yubico.webauthn.RelyingParty
+import com.yubico.webauthn.StartAssertionOptions
+import com.yubico.webauthn.StartRegistrationOptions
+import com.yubico.webauthn.data.AuthenticatorSelectionCriteria
+import com.yubico.webauthn.data.PublicKeyCredential
+import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions
+import com.yubico.webauthn.data.ResidentKeyRequirement
+import com.yubico.webauthn.data.UserIdentity
+import com.yubico.webauthn.data.UserVerificationRequirement
+import com.yubico.webauthn.exception.AssertionFailedException
+import com.yubico.webauthn.exception.RegistrationFailedException
 import jakarta.servlet.http.HttpServletResponse
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.component.EmailComponent
@@ -11,25 +27,36 @@ import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.component.JwtTokenComponent
 import ltd.guimc.web.altget.config.SiteProperities
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
+import ltd.guimc.web.altget.entity.db.passkey.PasskeyCredentialEntity
 import ltd.guimc.web.altget.entity.db.user.CoreAuth
 import ltd.guimc.web.altget.entity.db.user.UserDetails
 import ltd.guimc.web.altget.entity.db.user.UserOauth
 import ltd.guimc.web.altget.entity.request.auth.LoginVerifyRequest
 import ltd.guimc.web.altget.entity.request.auth.RegisterRequest
+import ltd.guimc.web.altget.entity.request.passkey.PasskeyLoginOptionsRequest
+import ltd.guimc.web.altget.entity.request.passkey.PasskeyLoginVerifyRequest
+import ltd.guimc.web.altget.entity.request.passkey.PasskeyRegisterVerifyRequest
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.auth.LoginChallengeResponse
 import ltd.guimc.web.altget.entity.response.auth.LoginVerifyResponse
+import ltd.guimc.web.altget.entity.response.passkey.PasskeyCredentialResponse
+import ltd.guimc.web.altget.entity.response.passkey.PasskeyOptionsResponse
 import ltd.guimc.web.altget.enum.EnumOauthUsage
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
 import ltd.guimc.web.altget.service.coin.UserCoinService
+import ltd.guimc.web.altget.service.passkey.PasskeyCredentialService
+import ltd.guimc.web.altget.service.passkey.WebAuthnChallengeCacheService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserDetailsService
 import ltd.guimc.web.altget.service.user.UserOauthService
 import ltd.guimc.web.altget.service.user.UserOperationService
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
@@ -41,6 +68,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.security.MessageDigest
 import java.time.Duration
+import java.time.LocalDateTime
 import java.util.*
 
 @RestController("/api/auth")
@@ -55,8 +83,12 @@ class AuthController(
     @Qualifier("objectRedisTemplate")
     private val objectRedisTemplate: RedisTemplate<String, Any>,
     private val userDetailsService: UserDetailsService,
-    private val userOperationService: UserOperationService
+    private val userOperationService: UserOperationService,
+    private val relyingParty: RelyingParty,
+    private val passkeyCredentialService: PasskeyCredentialService,
+    private val webAuthnChallengeCacheService: WebAuthnChallengeCacheService
 ) {
+    private val log = LoggerFactory.getLogger(AuthController::class.java)
     // <editor-fold desc="用户注册">
     @PostMapping("/register")
     fun register(@RequestBody request: RegisterRequest): ResponseBase<String> {
@@ -246,6 +278,9 @@ class AuthController(
             return ResponseBase(500, "获取 GitHub 用户信息失败")
         }
         val userId = userOauthService.getUserIdByGithubId(githubUserId) ?: return ResponseBase(400, "该 GitHub 账号未绑定账号")
+        val userDetails = userDetailsService.getById(userId) ?: return ResponseBase(400, "服务器 SRP Session 异常")
+        if (userDetails.userRole == EnumUserRole.UNVERIFY) return ResponseBase(400, "账号未激活，请先激活账号")
+        if (userDetails.userRole == EnumUserRole.BANNED) return ResponseBase(400, "账号已被封禁，请联系管理员")
         val jwtToken = jwtTokenComponent.generateLoginSession(userId)
         userOperationService.log(userId, EnumUserOperation.LOGIN, "Github OAuth 登录")
         return ResponseBase(jwtToken)
@@ -303,6 +338,236 @@ class AuthController(
         val json = JSONObject(res.body())
         return json.getLong("id").toString()
     }
+    // </editor-fold>
+
+    // <editor-fold desc="Passkey 登录">
+    private fun <T> requirePasskeyAuth(currentUserId: Int?): ResponseBase<T>? {
+        if (currentUserId == null) {
+            return ResponseBase(401, "Not logged in")
+        }
+        return null
+    }
+
+    @PostMapping("/passkey/register/options")
+    fun passkeyRegisterOptions(
+        @CurrentUserId userId: Int?
+    ): ResponseBase<PasskeyOptionsResponse> {
+        requirePasskeyAuth<PasskeyOptionsResponse>(userId)?.let { return it }
+        val uid = userId!!
+
+        val user = coreAuthService.getById(uid)
+            ?: return ResponseBase(400, "User not found")
+
+        val userHandleB64 = passkeyCredentialService.getOrCreateUserHandle(uid)
+
+        val userIdentity: UserIdentity
+        try {
+            userIdentity = UserIdentity.builder()
+                .name(user.username ?: "user_$uid")
+                .displayName(user.username ?: "user_$uid")
+                .id(com.yubico.webauthn.data.ByteArray.fromBase64Url(userHandleB64))
+                .build()
+        } catch (e: Exception) {
+            log.error("Invalid user handle for user {}", uid, e)
+            return ResponseBase(500, "Internal error")
+        }
+
+        val options = StartRegistrationOptions.builder()
+            .user(userIdentity)
+            .authenticatorSelection(
+                AuthenticatorSelectionCriteria.builder()
+                    .residentKey(ResidentKeyRequirement.PREFERRED)
+                    .userVerification(UserVerificationRequirement.PREFERRED)
+                    .build()
+            )
+            .build()
+
+        val creationOptions: PublicKeyCredentialCreationOptions = relyingParty.startRegistration(options)
+
+        try {
+            val challengeId = UUID.randomUUID().toString()
+            val serialized = creationOptions.toJson()
+            webAuthnChallengeCacheService.storeChallenge("reg:$challengeId", serialized)
+
+            return ResponseBase(
+                PasskeyOptionsResponse(
+                    challengeId = challengeId,
+                    options = creationOptions.toCredentialsCreateJson()
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Failed to serialize registration options", e)
+            return ResponseBase(500, "Internal error")
+        }
+    }
+
+    @PostMapping("/passkey/register/verify")
+    fun passkeyRegisterVerify(
+        @CurrentUserId userId: Int?,
+        @RequestBody request: PasskeyRegisterVerifyRequest
+    ): ResponseBase<String> {
+        requirePasskeyAuth<String>(userId)?.let { return it }
+        val uid = userId!!
+
+        val storedOptionsJson = webAuthnChallengeCacheService.consumeChallenge("reg:${request.challengeId}")
+            ?: return ResponseBase(400, "Challenge expired or invalid")
+
+        return try {
+            val creationOptions = PublicKeyCredentialCreationOptions.fromJson(storedOptionsJson)
+            val pkc = PublicKeyCredential.parseRegistrationResponseJson(request.credential)
+
+            val finishOptions = FinishRegistrationOptions.builder()
+                .request(creationOptions)
+                .response(pkc)
+                .build()
+
+            val result: RegistrationResult = relyingParty.finishRegistration(finishOptions)
+
+            val entity = PasskeyCredentialEntity().apply {
+                this.userId = uid
+                credentialId = result.keyId.id.base64Url
+                publicKeyCose = result.publicKeyCose.base64Url
+                signatureCount = result.signatureCount
+                userHandle = passkeyCredentialService.getOrCreateUserHandle(uid)
+                credentialName = request.name ?: "My Passkey"
+                discoverable = result.isDiscoverable.orElse(false) ?: false
+                createdAt = LocalDateTime.now()
+            }
+            passkeyCredentialService.save(entity)
+
+            userOperationService.log(uid, EnumUserOperation.PASSKEY_REGISTER, "Passkey注册")
+            ResponseBase("Passkey registered successfully")
+        } catch (e: RegistrationFailedException) {
+            log.error("Passkey registration failed", e)
+            ResponseBase(400, "Passkey registration failed")
+        } catch (e: Exception) {
+            log.error("Failed to parse passkey registration response", e)
+            ResponseBase(400, "Invalid credential data")
+        }
+    }
+
+    @PostMapping("/passkey/login/options")
+    fun passkeyLoginOptions(
+        @RequestBody(required = false) request: PasskeyLoginOptionsRequest?
+    ): ResponseBase<PasskeyOptionsResponse> {
+        val username = request?.username
+
+        val builder = StartAssertionOptions.builder()
+            .userVerification(UserVerificationRequirement.PREFERRED)
+
+        if (!username.isNullOrBlank()) {
+            builder.username(username)
+        }
+
+        val assertionRequest: AssertionRequest = relyingParty.startAssertion(builder.build())
+
+        return try {
+            val challengeId = UUID.randomUUID().toString()
+            val serialized = assertionRequest.toJson()
+            webAuthnChallengeCacheService.storeChallenge("auth:$challengeId", serialized)
+
+            ResponseBase(
+                PasskeyOptionsResponse(
+                    challengeId = challengeId,
+                    options = assertionRequest.toCredentialsGetJson()
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Failed to serialize assertion options", e)
+            ResponseBase(500, "Internal error")
+        }
+    }
+
+    @PostMapping("/passkey/login/verify")
+    fun passkeyLoginVerify(
+        @RequestBody request: PasskeyLoginVerifyRequest
+    ): ResponseBase<String> {
+        val storedRequestJson = webAuthnChallengeCacheService.consumeChallenge("auth:${request.challengeId}")
+            ?: return ResponseBase(400, "Challenge expired or invalid")
+
+        return try {
+            val assertionRequest = AssertionRequest.fromJson(storedRequestJson)
+            val pkc = PublicKeyCredential.parseAssertionResponseJson(request.credential)
+
+            val finishOptions = FinishAssertionOptions.builder()
+                .request(assertionRequest)
+                .response(pkc)
+                .build()
+
+            val result: AssertionResult = relyingParty.finishAssertion(finishOptions)
+
+            if (!result.isSuccess) {
+                return ResponseBase(400, "Passkey authentication failed")
+            }
+
+            // Update signature counter
+            val cred = passkeyCredentialService.getByCredentialId(
+                result.credential.credentialId.base64Url
+            )
+            if (cred != null) {
+                passkeyCredentialService.updateSignatureCount(cred.id, result.signatureCount)
+            }
+
+            // Look up the user
+            val username = result.username
+            val user = coreAuthService.getByUsername(username)
+                ?: return ResponseBase(400, "User not found")
+
+            // Standard checks (same as existing login flow)
+            val userDetails = userDetailsService.getById(user.userId)
+                ?: return ResponseBase(500, "User details not found")
+
+            if (userDetails.userRole == EnumUserRole.UNVERIFY) {
+                return ResponseBase(400, "User not verified")
+            }
+            if (userDetails.userRole == EnumUserRole.BANNED) {
+                return ResponseBase(400, "User banned")
+            }
+
+            // Issue token
+            val webToken = jwtTokenComponent.generateLoginSession(user.userId)
+            userOperationService.log(user.userId, EnumUserOperation.PASSKEY_LOGIN, "Passkey登录")
+            ResponseBase(webToken)
+        } catch (e: AssertionFailedException) {
+            log.error("Passkey authentication failed", e)
+            ResponseBase(400, "Passkey authentication failed")
+        } catch (e: Exception) {
+            log.error("Failed to parse passkey assertion response", e)
+            ResponseBase(400, "Invalid credential data")
+        }
+    }
+
+    @GetMapping("/passkey/list")
+    fun passkeyList(
+        @CurrentUserId userId: Int?
+    ): ResponseBase<List<PasskeyCredentialResponse>> {
+        requirePasskeyAuth<List<PasskeyCredentialResponse>>(userId)?.let { return it }
+
+        val creds = passkeyCredentialService.getCredentialsByUserId(userId!!)
+        val result = creds.map { c ->
+            PasskeyCredentialResponse(
+                id = c.id,
+                name = c.credentialName,
+                createdAt = c.createdAt.toString()
+            )
+        }
+        return ResponseBase(result)
+    }
+
+    @DeleteMapping("/passkey/{id}")
+    fun passkeyDelete(
+        @PathVariable id: Int,
+        @CurrentUserId userId: Int?
+    ): ResponseBase<String> {
+        requirePasskeyAuth<String>(userId)?.let { return it }
+
+        return if (passkeyCredentialService.deleteCredential(id, userId!!)) {
+            ResponseBase("Deleted")
+        } else {
+            ResponseBase(400, "Passkey not found")
+        }
+    }
+
     // </editor-fold>
 
     // <editor-fold desc="校验器">

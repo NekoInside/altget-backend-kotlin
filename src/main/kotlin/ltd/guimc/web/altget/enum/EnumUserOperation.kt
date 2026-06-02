@@ -19,4 +19,6 @@ enum class EnumUserOperation(
     ADMIN_TOKEN_GENERATE(10, "管理员生成Token"),
     API_KEY_NEW(11, "新建API密钥"),
     API_KEY_ROTATE(12, "轮换API密钥"),
+    PASSKEY_REGISTER(13, "Passkey注册"),
+    PASSKEY_LOGIN(14, "Passkey登录"),
 }
