@@ -44,6 +44,18 @@ class JwtTokenComponent(
         return jwtToken
     }
 
+    // 忘记密码验证 token
+    fun generatePasswordResetToken(email: String): String {
+        val now = Date()
+        val jwtToken = JWT.create()
+            .setKey(jwtProperties.secret.toByteArray())
+            .setSubject(email)
+            .setIssuedAt(now)
+            .setExpiresAt(Date(now.time + jwtProperties.registerVerifyTokenExpiration.toMillis()))
+            .sign()
+        return jwtToken
+    }
+
     // 验证 JWT 是否过期 / 是否用正确的 Key 签名
     fun isJWTVaild(token: String): Boolean {
         try {

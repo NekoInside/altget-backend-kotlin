@@ -1,8 +1,13 @@
 package ltd.guimc.web.altget.controller
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
+import ltd.guimc.web.altget.entity.db.user.UserOperation
 import ltd.guimc.web.altget.entity.response.ResponseBase
+import ltd.guimc.web.altget.entity.response.PageResponse
+import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
+import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
 import ltd.guimc.web.altget.entity.response.user.SimpleUserInfo
 import ltd.guimc.web.altget.entity.response.user.UserInfo
 import ltd.guimc.web.altget.enum.EnumTransactionType
@@ -90,13 +95,19 @@ class AdminController(
 
     // <editor-fold desc="List Users">
     @GetMapping("/users")
-    fun listUsers(@CurrentUserId userId: Int?, @RequestParam size: Int = 20, @RequestParam page: Int = 1): ResponseBase<List<SimpleUserInfo>> {
-        requireAdmin<List<SimpleUserInfo>>(userId)?.let { return it }
+    fun listUsers(@CurrentUserId userId: Int?, @RequestParam size: Int = 20, @RequestParam page: Int = 1): ResponseBase<PageResponse<SimpleUserInfo>> {
+        requireAdmin<PageResponse<SimpleUserInfo>>(userId)?.let { return it }
         val pageResult = coreAuthService.getPage(page, size)
         val userInfoList = pageResult.records.mapNotNull { coreAuth ->
             buildSimpleUserInfo(coreAuth.userId)
         }
-        return ResponseBase(userInfoList)
+        return ResponseBase(PageResponse(
+            records = userInfoList,
+            total = pageResult.total,
+            size = pageResult.size,
+            current = pageResult.current,
+            pages = pageResult.pages
+        ))
     }
     // </editor-fold>
 
@@ -204,6 +215,88 @@ class AdminController(
         }
         userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_GENERATE, "Generated $tokenAmount tokens with $coinAmount coins each")
         return ResponseBase(tokens)
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="List Tokens">
+    @GetMapping("/tokens")
+    fun listTokens(
+        @CurrentUserId userId: Int?,
+        @RequestParam(defaultValue = "1") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseBase<PageResponse<CoinTokenResponse>> {
+        requireAdmin<PageResponse<CoinTokenResponse>>(userId)?.let { return it }
+        val pageResult = coinTokenService.getPage(page, size)
+        val tokenList = pageResult.records.map { token ->
+            CoinTokenResponse(
+                id = token.id,
+                coinAmount = token.coinAmount,
+                createdBy = token.createdBy,
+                createdAt = token.createdAt?.toString(),
+                redeemedBy = token.redeemedBy,
+                redeemedAt = token.redeemedAt?.toString(),
+                isUsed = token.isUsed
+            )
+        }
+        return ResponseBase(PageResponse(
+            records = tokenList,
+            total = pageResult.total,
+            size = pageResult.size,
+            current = pageResult.current,
+            pages = pageResult.pages
+        ))
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Remove Token">
+    @PostMapping("/token/{tokenId}/remove")
+    @Transactional
+    fun removeToken(@CurrentUserId userId: Int?, @PathVariable tokenId: String): ResponseBase<String> {
+        requireAdmin<String>(userId)?.let { return it }
+        val token = coinTokenService.getById(tokenId)
+            ?: return ResponseBase(404, "Token not found")
+        coinTokenService.removeById(tokenId)
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_REMOVE, "Removed token $tokenId (coinAmount=${token.coinAmount}, isUsed=${token.isUsed})")
+        return ResponseBase("Token removed successfully")
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="List Operation Log">
+    @GetMapping("/operations")
+    fun listOperations(
+        @CurrentUserId userId: Int?,
+        @RequestParam(defaultValue = "1") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(required = false) filterUserId: Int?,
+        @RequestParam(required = false) filterOperation: Int?,
+        @RequestParam(required = false) filterTimeStart: String?,
+        @RequestParam(required = false) filterTimeEnd: String?
+    ): ResponseBase<PageResponse<AdminOperationLogResponse>> {
+        requireAdmin<PageResponse<AdminOperationLogResponse>>(userId)?.let { return it }
+        val queryWrapper = QueryWrapper<UserOperation>()
+            .apply { filterUserId?.let { eq("user_id", it) } }
+            .apply { filterOperation?.let { eq("operation", it) } }
+            .apply { filterTimeStart?.let { ge("operation_time", it) } }
+            .apply { filterTimeEnd?.let { le("operation_time", it) } }
+            .orderByDesc("operation_time")
+        val pageResult = userOperationService.getPage(page, size, queryWrapper)
+        val logs = pageResult.records.map { op ->
+            AdminOperationLogResponse(
+                operationId = op.operationId ?: "",
+                operationTime = op.operationTime.toString(),
+                userId = op.userId,
+                username = op.username ?: "",
+                operation = op.operation ?: EnumUserOperation.LOGIN,
+                description = op.description ?: ""
+            )
+        }
+        return ResponseBase(PageResponse(
+            records = logs,
+            total = pageResult.total,
+            size = pageResult.size,
+            current = pageResult.current,
+            pages = pageResult.pages
+        ))
     }
     // </editor-fold>
 }

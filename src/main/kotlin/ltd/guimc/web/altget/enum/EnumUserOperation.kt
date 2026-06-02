@@ -21,4 +21,5 @@ enum class EnumUserOperation(
     API_KEY_ROTATE(12, "轮换API密钥"),
     PASSKEY_REGISTER(13, "Passkey注册"),
     PASSKEY_LOGIN(14, "Passkey登录"),
+    ADMIN_TOKEN_REMOVE(15, "管理员删除Token"),
 }

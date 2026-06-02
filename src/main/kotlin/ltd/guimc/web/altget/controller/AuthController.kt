@@ -31,8 +31,10 @@ import ltd.guimc.web.altget.entity.db.passkey.PasskeyCredentialEntity
 import ltd.guimc.web.altget.entity.db.user.CoreAuth
 import ltd.guimc.web.altget.entity.db.user.UserDetails
 import ltd.guimc.web.altget.entity.db.user.UserOauth
+import ltd.guimc.web.altget.entity.request.auth.ForgotPasswordRequest
 import ltd.guimc.web.altget.entity.request.auth.LoginVerifyRequest
 import ltd.guimc.web.altget.entity.request.auth.RegisterRequest
+import ltd.guimc.web.altget.entity.request.auth.ResetPasswordRequest
 import ltd.guimc.web.altget.entity.request.passkey.PasskeyLoginOptionsRequest
 import ltd.guimc.web.altget.entity.request.passkey.PasskeyLoginVerifyRequest
 import ltd.guimc.web.altget.entity.request.passkey.PasskeyRegisterVerifyRequest
@@ -53,6 +55,7 @@ import ltd.guimc.web.altget.service.user.UserOauthService
 import ltd.guimc.web.altget.service.user.UserOperationService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -144,6 +147,45 @@ class AuthController(
             userRole = EnumUserRole.VERIFY
         })
         return ResponseBase("账户激活成功，您现在可以使用账号密码登录了")
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="忘记密码">
+    @PostMapping("/forgot-password")
+    fun forgotPassword(@RequestBody request: ForgotPasswordRequest): ResponseBase<String> {
+        if (!geetestVerifyComponent.verify(request)) {
+            return ResponseBase(400, "人机验证校验失败")
+        }
+        if (!isValidEmail(request.email)) {
+            return ResponseBase(400, "邮箱格式不正确")
+        }
+        val coreAuth = coreAuthService.getByEmail(request.email)
+        if (coreAuth != null) {
+            val token = jwtTokenComponent.generatePasswordResetToken(request.email)
+            val resetUrl = "https://" + siteProperities.domain + "/reset-password?token=" + URLEncoder.encode(token, "UTF-8")
+            emailComponent.sendPasswordResetEmail(request.email, coreAuth.username ?: "", resetUrl)
+        }
+        // Always return the same message to prevent email enumeration
+        Thread.sleep(3000)
+        return ResponseBase("若该邮箱已注册，我们将发送一封密码重置邮件到该邮箱，请注意查收")
+    }
+
+    @PostMapping("/reset-password")
+    @Transactional
+    fun resetPassword(@RequestBody request: ResetPasswordRequest): ResponseBase<String> {
+        val email = jwtTokenComponent.getEmailFromToken(request.token)
+            ?: return ResponseBase(400, "无效的重置链接")
+        if (!jwtTokenComponent.isJWTVaild(request.token)) {
+            return ResponseBase(400, "重置链接已过期")
+        }
+        val coreAuth = coreAuthService.getByEmail(email)
+            ?: return ResponseBase(400, "无效的重置链接")
+        coreAuthService.updateById(coreAuth.apply {
+            srpSalt = request.salt
+            srpVerifier = request.verifier
+        })
+        userOperationService.log(coreAuth.userId, EnumUserOperation.PASSWORD_RESET, "通过邮箱重置密码")
+        return ResponseBase("密码重置成功，您现在可以使用新密码登录了")
     }
     // </editor-fold>
 

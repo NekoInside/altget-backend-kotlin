@@ -1,7 +1,6 @@
-- [ ] Alt API
+- [x] Alt API
 	- [x] Key fetch
 	- [x] Web fetch \(PoW required\) \(Captcha required\)
-	- [ ] Post \(Auth required\)
 - [x] Auth API
 	- [x] Register \(Captcha required\)
 	- [x] Password login
@@ -9,12 +8,17 @@
 	- [x] Passkey register
 	- [x] GitHub login
 	- [x] GitHub bind
+    - [x] Forget password \(Captcha required\)
+    - [x] Reset password \(Only from forget password email\)
 - [x] Admin API
 	- [x] List users \(Role admin required\)
 	- [x] Get selected user info \(Role admin required\)
 	- [x] Ban/unban selected user \(Role admin required\)
 	- [x] Add/subtract selected user credit \(Role admin required\)
 	- [x] Generate token \(token amount, coin amount pre token) \(Role admin required\)
+    - [x] List tokens \(Role admin required\)
+    - [x] Remove token \(Role admin required\)
+    - [x] List operation log \(allow filter by user/action/time\) \(Role admin required\)
 - [x] Social API
 	- [x] Discord Bind
 - [x] Proof of Work API
