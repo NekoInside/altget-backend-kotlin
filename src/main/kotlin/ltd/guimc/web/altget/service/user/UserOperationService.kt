@@ -21,4 +21,8 @@ class UserOperationService(private val coreAuthService: CoreAuthService) : Servi
             })
         }
     }
+
+    fun removeByUserId(userId: Int) {
+        remove(query().eq("user_id", userId))
+    }
 }
