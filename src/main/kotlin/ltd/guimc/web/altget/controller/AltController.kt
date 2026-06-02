@@ -1,13 +1,20 @@
 package ltd.guimc.web.altget.controller
 
 import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.component.DiscordApiService
 import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.entity.request.CaptchaRequest
 import ltd.guimc.web.altget.entity.response.ResponseBase
+import ltd.guimc.web.altget.enum.EnumApiLimitLevel
+import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.service.alt.AltService
+import ltd.guimc.web.altget.service.alt.PayForAltService
+import ltd.guimc.web.altget.service.geolocation.GeolocationService
 import ltd.guimc.web.altget.service.pow.PoWTaskService
+import ltd.guimc.web.altget.service.user.UserApiService
 import ltd.guimc.web.altget.service.user.UserDetailsService
+import ltd.guimc.web.altget.service.user.UserOperationService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -21,19 +28,60 @@ class AltController(
     private val poWTaskService: PoWTaskService,
     private val altService: AltService,
     private val userDetailsService: UserDetailsService,
-    private val discordApiService: DiscordApiService
+    private val discordApiService: DiscordApiService,
+    private val userApiService: UserApiService,
+    private val payForAltService: PayForAltService,
+    private val userOperationService: UserOperationService,
+    private val geolocationService: GeolocationService
 ) {
     @GetMapping(params = ["userApiKey"])
-    fun apiFetch(@RequestParam(required = false) userApiKey: String?, paid: Boolean = false, count: Int = 1): ResponseBase<List<String>> {
-        // TODO
-        return ResponseBase(arrayListOf())
+    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1): ResponseBase<List<String>> {
+        if (!paid && count != 1) return ResponseBase(400, "Not allowed")
+        if (count <= 0) return ResponseBase(400, "Invalid count wanted")
+        val userApi = try {
+            userApiService.getByApiKey(userApiKey)
+        } catch (_: Exception) {
+            return ResponseBase(400, "Invalid api key")
+        }
+        if (paid) {
+            try {
+                val data = payForAltService.payForAltAs(count, userApi.userId)
+                val result = mutableListOf<String>()
+                data.forEach {
+                    result += "${it.username}----${it.password}"
+                }
+                userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, "Fetched $count alts via paid API")
+                return ResponseBase(result)
+            } catch (e: RuntimeException) {
+                return ResponseBase(400, e.message ?: "Error occurred")
+            }
+        }
+        val userDetail = userDetailsService.getById(userApi.userId)
+        if (userDetail.dailyUserApiFetched >= userApi.limitLevel.limitDau &&
+            userApi.limitLevel != EnumApiLimitLevel.LEVEL_UNLIMITED) return ResponseBase(400, "Daily limit reached")
+        val data = altService.fetchAlt(count, "default")
+        if (data.isEmpty()) return ResponseBase(400, "No alt available")
+        if (userDetail.dailyUserApiFetched++ >= userApi.limitLevel.limitDau &&
+            userApi.limitLevel != EnumApiLimitLevel.LEVEL_UNLIMITED) {
+            userApiService.updateById(userApi.apply {
+                limitLevel = limitLevel.getHigherLimitLevel()
+            })
+        }
+        userOperationService.log(userApi.userId, EnumUserOperation.API_FETCH, "Fetched alt via API")
+        userDetailsService.updateById(userDetail.apply {
+            dailyUserApiFetched += 1
+            totalUserApiFetched += 1
+            dailyAltFetched += 1
+            totalAltFetched += 1
+        })
+        return ResponseBase(mutableListOf("${data[0].username}----${data[0].password}"))
     }
 
     @GetMapping(params = ["!userApiKey"])
     fun webFetch(captchaId: String, captchaOutput: String, genTime: String, lotNumber: String, passToken: String, // captcha
                  taskId: String, nonce: String, // PoW
                  channel: String = "default",
-                 @CurrentUserId userId: Int?): ResponseBase<String> {
+                 @CurrentUserId userId: Int?, @RealIP ip: String): ResponseBase<String> {
         val captchaRequest = CaptchaRequest(captchaId, captchaOutput, genTime, lotNumber, passToken)
         if (!geetestVerifyComponent.verify(captchaRequest)) {
             return ResponseBase(400, "Captcha verification failed")
@@ -43,6 +91,9 @@ class AltController(
         }
         if (!meetChannelRequirement(channel, userId)) {
             return ResponseBase(403, "Channel requirement not met")
+        }
+        if (userId == null && !meetAnonymousRequirement(ip)) {
+            return ResponseBase(403, "Login required for your region")
         }
         val data = altService.fetchAlt(1, channel)
         if (data.isEmpty()) {
@@ -61,5 +112,9 @@ class AltController(
             return registerTime <= wantedRegisterTime || discordApiService.checkIsUserSponsor(userId)
         }
         return true
+    }
+
+    fun meetAnonymousRequirement(ip: String): Boolean {
+        return geolocationService.getGeolocation(ip).countryName == "China"
     }
 }
