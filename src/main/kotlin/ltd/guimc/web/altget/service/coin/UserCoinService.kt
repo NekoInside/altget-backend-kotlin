@@ -2,12 +2,13 @@ package ltd.guimc.web.altget.service.coin
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
+import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.mapper.db.coin.UserCoinMapper
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-class UserCoinService : ServiceImpl<UserCoinMapper, UserCoin>() {
+class UserCoinService(private val coinTransactionHistoryService: CoinTransactionHistoryService) : ServiceImpl<UserCoinMapper, UserCoin>() {
     @Transactional
     fun transfer(fromId: Int, toId: Int, amount: Int) {
         val fromUserCoin = getById(fromId) ?: throw IllegalArgumentException("用户 $fromId 不存在")
@@ -22,5 +23,7 @@ class UserCoinService : ServiceImpl<UserCoinMapper, UserCoin>() {
 
         updateById(fromUserCoin)
         updateById(toUserCoin)
+        coinTransactionHistoryService.logTransaction(userId = fromId, amount = -amount, type = EnumTransactionType.TRANSFER_SENT)
+        coinTransactionHistoryService.logTransaction(userId = toId, amount = amount, type = EnumTransactionType.TRANSFER_RECEIVED)
     }
 }

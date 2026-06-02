@@ -100,6 +100,15 @@ class AltController(
             return ResponseBase(500, "No alt available")
         }
         val alt = data[0]
+        if (userId != null) {
+            userOperationService.log(userId, EnumUserOperation.WEB_FETCH, "Fetched alt ${alt.username}----${alt.password} via web channel '$channel'")
+            userDetailsService.updateById(userDetailsService.getById(userId)?.apply {
+                dailyWebFetched += 1
+                totalWebFetched += 1
+                dailyAltFetched += 1
+                totalAltFetched += 1
+            })
+        }
         return ResponseBase("${alt.username}----${alt.password}")
     }
 

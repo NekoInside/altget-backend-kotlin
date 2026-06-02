@@ -5,13 +5,14 @@ import com.baomidou.mybatisplus.annotation.TableField
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import java.time.LocalDateTime
+import java.util.UUID
 
 @TableName
 class CoinToken {
     @TableId
-    var id: String? = null
+    var id: String = UUID.randomUUID().toString()
 
-    var coinAmount: Int? = null
+    var coinAmount: Int = 0
 
     var createdBy: Int? = null
 
