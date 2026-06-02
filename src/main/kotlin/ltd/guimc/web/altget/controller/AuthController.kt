@@ -22,6 +22,7 @@ import com.yubico.webauthn.exception.AssertionFailedException
 import com.yubico.webauthn.exception.RegistrationFailedException
 import jakarta.servlet.http.HttpServletResponse
 import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.component.EmailComponent
 import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.component.JwtTokenComponent
@@ -51,6 +52,7 @@ import ltd.guimc.web.altget.service.passkey.PasskeyCredentialService
 import ltd.guimc.web.altget.service.passkey.WebAuthnChallengeCacheService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserDetailsService
+import ltd.guimc.web.altget.service.geolocation.GeolocationService
 import ltd.guimc.web.altget.service.user.UserOauthService
 import ltd.guimc.web.altget.service.user.UserOperationService
 import org.slf4j.LoggerFactory
@@ -87,6 +89,7 @@ class AuthController(
     private val objectRedisTemplate: RedisTemplate<String, Any>,
     private val userDetailsService: UserDetailsService,
     private val userOperationService: UserOperationService,
+    private val geolocationService: GeolocationService,
     private val relyingParty: RelyingParty,
     private val passkeyCredentialService: PasskeyCredentialService,
     private val webAuthnChallengeCacheService: WebAuthnChallengeCacheService
@@ -242,7 +245,7 @@ class AuthController(
     }
 
     @PostMapping("/password/token")
-    fun passwordVerify(@RequestBody request: LoginVerifyRequest): ResponseBase<LoginVerifyResponse> {
+    fun passwordVerify(@RequestBody request: LoginVerifyRequest, @RealIP ip: String?): ResponseBase<LoginVerifyResponse> {
         var serverSession: SRP6ServerSession?
         try {
             serverSession = objectRedisTemplate.opsForValue().get("srp:session:${request.sessionId}") as? SRP6ServerSession
@@ -264,6 +267,11 @@ class AuthController(
             val userDetails = userDetailsService.getById(coreAuthEntity.userId) ?: return ResponseBase(400, "服务器 SRP Session 异常")
             if (userDetails.userRole == EnumUserRole.UNVERIFY) return ResponseBase(400, "账号未激活，请先激活账号")
             if (userDetails.userRole == EnumUserRole.BANNED) return ResponseBase(400, "账号已被封禁，请联系管理员")
+            // 更新最后登录信息
+            userDetails.lastLoginTime = LocalDateTime.now()
+            userDetails.lastLoginIp = ip ?: ""
+            userDetails.lastLoginGeo = if (!ip.isNullOrBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(ip)) else ""
+            userDetailsService.updateById(userDetails)
             val jwtToken = jwtTokenComponent.generateLoginSession(coreAuthEntity.userId)
             userOperationService.log(coreAuthEntity.userId, EnumUserOperation.LOGIN, "账号密码登录")
             return ResponseBase(LoginVerifyResponse(m2.toString(16), jwtToken))
@@ -320,7 +328,7 @@ class AuthController(
     }
 
     @GetMapping("/github/login")
-    fun processLoginState(code: String, state: String): ResponseBase<String> {
+    fun processLoginState(code: String, state: String, @RealIP ip: String?): ResponseBase<String> {
         val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
         objectRedisTemplate.delete("oauth:github:state:$state")
         if (storedState != EnumOauthUsage.LOGIN) {
@@ -340,6 +348,11 @@ class AuthController(
         val userDetails = userDetailsService.getById(userId) ?: return ResponseBase(400, "服务器 SRP Session 异常")
         if (userDetails.userRole == EnumUserRole.UNVERIFY) return ResponseBase(400, "账号未激活，请先激活账号")
         if (userDetails.userRole == EnumUserRole.BANNED) return ResponseBase(400, "账号已被封禁，请联系管理员")
+        // 更新最后登录信息
+        userDetails.lastLoginTime = LocalDateTime.now()
+        userDetails.lastLoginIp = ip ?: ""
+        userDetails.lastLoginGeo = if (!ip.isNullOrBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(ip)) else ""
+        userDetailsService.updateById(userDetails)
         val jwtToken = jwtTokenComponent.generateLoginSession(userId)
         userOperationService.log(userId, EnumUserOperation.LOGIN, "Github OAuth 登录")
         return ResponseBase(jwtToken)
@@ -539,7 +552,8 @@ class AuthController(
 
     @PostMapping("/passkey/login/verify")
     fun passkeyLoginVerify(
-        @RequestBody request: PasskeyLoginVerifyRequest
+        @RequestBody request: PasskeyLoginVerifyRequest,
+        @RealIP ip: String?
     ): ResponseBase<String> {
         val storedRequestJson = webAuthnChallengeCacheService.consumeChallenge("auth:${request.challengeId}")
             ?: return ResponseBase(400, "Challenge expired or invalid")
@@ -582,6 +596,12 @@ class AuthController(
             if (userDetails.userRole == EnumUserRole.BANNED) {
                 return ResponseBase(400, "User banned")
             }
+
+            // Update last login info
+            userDetails.lastLoginTime = LocalDateTime.now()
+            userDetails.lastLoginIp = ip ?: ""
+            userDetails.lastLoginGeo = if (!ip.isNullOrBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(ip)) else ""
+            userDetailsService.updateById(userDetails)
 
             // Issue token
             val webToken = jwtTokenComponent.generateLoginSession(user.userId)

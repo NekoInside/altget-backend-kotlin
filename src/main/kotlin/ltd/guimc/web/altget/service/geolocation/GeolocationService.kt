@@ -71,6 +71,6 @@ class GeolocationService {
 
     companion object {
         private const val TIMEOUT_SECONDS = 3
-        private const val CACHE_EXPIRY_MINUTES = 60
+        private const val CACHE_EXPIRY_MINUTES = 7200
     }
 }
