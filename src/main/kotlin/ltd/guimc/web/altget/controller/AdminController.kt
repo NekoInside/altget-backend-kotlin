@@ -2,10 +2,12 @@ package ltd.guimc.web.altget.controller
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.entity.db.alt.AltConsumptionRecord
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import ltd.guimc.web.altget.entity.db.user.UserOperation
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.PageResponse
+import ltd.guimc.web.altget.entity.response.alt.AltConsumptionResponse
 import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
 import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
 import ltd.guimc.web.altget.entity.response.user.SimpleUserInfo
@@ -13,6 +15,7 @@ import ltd.guimc.web.altget.entity.response.user.UserInfo
 import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
+import ltd.guimc.web.altget.service.alt.AltConsumptionRecordService
 import ltd.guimc.web.altget.service.coin.CoinTokenService
 import ltd.guimc.web.altget.service.coin.CoinTransactionHistoryService
 import ltd.guimc.web.altget.service.coin.UserCoinService
@@ -35,7 +38,8 @@ class AdminController(
     private val userCoinService: UserCoinService,
     private val coinTokenService: CoinTokenService,
     private val coinTransactionHistoryService: CoinTransactionHistoryService,
-    private val userOperationService: UserOperationService
+    private val userOperationService: UserOperationService,
+    private val altConsumptionRecordService: AltConsumptionRecordService
 ) {
     // <editor-fold desc="Helper">
     /**
@@ -297,6 +301,41 @@ class AdminController(
             current = pageResult.current,
             pages = pageResult.pages
         ))
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Alt Consumption Statistics">
+    /**
+     * Query alt consumption records for frontend chart rendering.
+     * Minimum time granularity is one hour.
+     *
+     * @param channel  Optional filter by source channel
+     * @param startTime Optional start of time range (ISO-8601, e.g. "2026-06-01T00:00:00")
+     * @param endTime   Optional end of time range (ISO-8601, e.g. "2026-06-02T00:00:00")
+     * @return List of hourly consumption records
+     */
+    @GetMapping("/alt-consumption")
+    fun getAltConsumption(
+        @CurrentUserId userId: Int?,
+        @RequestParam(required = false) channel: String?,
+        @RequestParam(required = false) startTime: String?,
+        @RequestParam(required = false) endTime: String?
+    ): ResponseBase<List<AltConsumptionResponse>> {
+        requireAdmin<List<AltConsumptionResponse>>(userId)?.let { return it }
+        val queryWrapper = QueryWrapper<AltConsumptionRecord>()
+            .apply { channel?.let { eq("channel", it) } }
+            .apply { startTime?.let { ge("hour_slot", it) } }
+            .apply { endTime?.let { le("hour_slot", it) } }
+            .orderByAsc("hour_slot")
+        val records = altConsumptionRecordService.list(queryWrapper)
+        val response = records.map { record ->
+            AltConsumptionResponse(
+                channel = record.channel,
+                hourSlot = record.hourSlot.toString(),
+                consumedCount = record.consumedCount
+            )
+        }
+        return ResponseBase(response)
     }
     // </editor-fold>
 }

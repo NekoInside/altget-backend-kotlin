@@ -7,11 +7,16 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-class AltService : ServiceImpl<AltCategoryMapper, AltCategory>() {
+class AltService(
+    private val altConsumptionRecordService: AltConsumptionRecordService
+) : ServiceImpl<AltCategoryMapper, AltCategory>() {
     @Transactional(rollbackFor = [Exception::class])
     fun fetchAlt(count: Int = 1, channel: String = "default"): List<AltCategory> {
         val popupData = baseMapper.popupByChannel(channel, count)
         removeBatchByIds(popupData.map { it.id })
+        if (popupData.isNotEmpty()) {
+            altConsumptionRecordService.recordConsumption(channel, popupData.size)
+        }
         return popupData
     }
 }
