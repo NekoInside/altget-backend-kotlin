@@ -116,7 +116,7 @@ class AuthController(
     // </editor-fold>
 
     // <editor-fold desc="用户账号密码登录">
-    @GetMapping("/password")
+    @GetMapping("/password/challenge")
     fun passwordChallenge(username: String): ResponseBase<LoginChallengeResponse> {
         val coreAuthEntity = coreAuthService.getByUsername(username)
         var saltHex: String
@@ -151,7 +151,7 @@ class AuthController(
         return ResponseBase( LoginChallengeResponse(sessionId, saltHex, b.toString(16)))
     }
 
-    @PostMapping("/password")
+    @PostMapping("/password/token")
     fun passwordVerify(@RequestBody request: LoginVerifyRequest): ResponseBase<LoginVerifyResponse> {
         var serverSession: SRP6ServerSession?
         try {
