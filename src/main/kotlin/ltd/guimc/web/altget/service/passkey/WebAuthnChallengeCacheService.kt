@@ -10,7 +10,7 @@ import java.time.Duration
  */
 @Service
 class WebAuthnChallengeCacheService(
-    @Qualifier("stringRedisTemplate")
+    @Qualifier("customStringRedisTemplate")
     private val stringRedisTemplate: RedisTemplate<String, String>
 ) {
 
