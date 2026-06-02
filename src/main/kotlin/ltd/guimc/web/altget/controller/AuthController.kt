@@ -238,12 +238,13 @@ class AuthController(
 
     // <editor-fold desc="GitHub OAuth">
     @GetMapping("/github")
-    fun githubOAuth(response: HttpServletResponse): ResponseBase<String> {
+    fun githubOAuth(response: HttpServletResponse, usage: String?): ResponseBase<String> {
         val clientId = siteProperities.githubClientId
         val redirectUri = "https://${siteProperities.domain}/github-callback"
         val state = UUID.randomUUID().toString()
+        val oauthUsage = if (usage == "bind") EnumOauthUsage.BIND else EnumOauthUsage.LOGIN
         // 将 state 存储在 Redis 中，设置过期时间为 10 分钟
-        objectRedisTemplate.opsForValue().set("oauth:github:state:$state", EnumOauthUsage.LOGIN, Duration.ofMinutes(10))
+        objectRedisTemplate.opsForValue().set("oauth:github:state:$state", oauthUsage, Duration.ofMinutes(10))
         val oauthUrl = UrlBuilder.of("https://github.com/login/oauth/authorize")
             .addQuery("client_id", clientId)
             .addQuery("redirect_uri", redirectUri)

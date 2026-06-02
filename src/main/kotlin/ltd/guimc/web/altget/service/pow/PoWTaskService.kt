@@ -43,7 +43,7 @@ class PoWTaskService(private val poWVerificationService: PoWVerificationService)
         }
         val taskId = UUID.randomUUID().toString().replace("-", "")
         val data = generateSwipeBox() + UUID.randomUUID().toString().replace("-", "")
-        val task = PoWTask(target, difficulty, now, data)
+        val task = PoWTask(taskId, target, difficulty, now, data)
         taskMap[taskId] = task
         return task
     }
@@ -83,6 +83,7 @@ class PoWTaskService(private val poWVerificationService: PoWVerificationService)
     }
 
     data class PoWTask(
+        val taskId: String,
         val target: String,
         val difficulty: Int,
         val timestamp: Long,
