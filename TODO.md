@@ -14,15 +14,15 @@
 	- [ ] Get selected user info \(Role admin required\)
 	- [ ] Ban/unban selected user \(Role admin required\)
 	- [ ] Add/subtract selected user credit \(Role admin required\)
+	- [ ] Generate token \(Role admin required\)
 - [ ] Social API
 	- [x] Discord Bind
 	- [ ] Telegram Bind
 - [x] Proof of Work API
 	- [x] Create task
 - [ ] Coins API
-	- [ ] Redeem token
+	- [x] Redeem token
 	- [x] Transfer credit
-    - [ ] Generate token \(Role admin required\)
 - [ ] User API
 	- [ ] Get self information
 	- [ ] Get self operation log

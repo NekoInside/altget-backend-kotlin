@@ -23,7 +23,7 @@ class CurrentUserIdArgumentResolver : HandlerMethodArgumentResolver {
         binderFactory: WebDataBinderFactory?
     ): Any? {
         return webRequest.getAttribute(
-            Interceptor.USER_ID_ATTRIBUTE,
+            RequestInterceptor.USER_ID_ATTRIBUTE,
             RequestAttributes.SCOPE_REQUEST
         )
     }

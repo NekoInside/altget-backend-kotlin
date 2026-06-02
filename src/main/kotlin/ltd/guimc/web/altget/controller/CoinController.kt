@@ -2,13 +2,18 @@ package ltd.guimc.web.altget.controller
 
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.entity.response.ResponseBase
+import ltd.guimc.web.altget.service.coin.CoinTokenService
 import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController("/api/coins")
-class CoinController(private val userCoinService: UserCoinService, private val coreAuthService: CoreAuthService) {
+class CoinController(
+    private val userCoinService: UserCoinService,
+    private val coreAuthService: CoreAuthService,
+    private val coinTokenService: CoinTokenService
+) {
     @GetMapping("/transfer")
     fun transfer(@CurrentUserId userId: Int?, targetUserName: String, credits: Int): ResponseBase<String> {
         if (userId == null) return ResponseBase(401, "Unauthorized")
@@ -17,5 +22,17 @@ class CoinController(private val userCoinService: UserCoinService, private val c
         val targetUser = coreAuthService.getByUsername(targetUserName) ?: return ResponseBase(404, "Target user not found")
         userCoinService.transfer(userId, targetUser.userId, credits)
         return ResponseBase("Transfer successful")
+    }
+
+    @GetMapping("/redeem")
+    fun redeem(@CurrentUserId userId: Int?, token: String): ResponseBase<String> {
+        if (userId == null) return ResponseBase(401, "Unauthorized")
+        val coinToken = coinTokenService.getById(token) ?: return ResponseBase(401, "No valid token found")
+        if (coinToken.isUsed) return ResponseBase(401, "Token already redeemed")
+        return if (coinTokenService.redeemTokenForUser(token, userId)) {
+            ResponseBase("Redeem successful")
+        } else {
+            ResponseBase(404, "Token could not be redeemed")
+        }
     }
 }

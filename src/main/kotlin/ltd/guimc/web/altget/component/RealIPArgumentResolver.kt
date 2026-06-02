@@ -22,7 +22,7 @@ class RealIPArgumentResolver : HandlerMethodArgumentResolver {
         binderFactory: WebDataBinderFactory?
     ): Any? {
         return webRequest.getAttribute(
-            Interceptor.REAL_IP_ATTRIBUTE,
+            RequestInterceptor.REAL_IP_ATTRIBUTE,
             RequestAttributes.SCOPE_REQUEST
         )
     }

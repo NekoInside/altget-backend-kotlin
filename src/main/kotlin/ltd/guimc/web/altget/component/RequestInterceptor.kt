@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
 
 @Component
-class Interceptor(private val jwtTokenComponent: JwtTokenComponent) : HandlerInterceptor {
+class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent) : HandlerInterceptor {
 
     companion object {
         const val USER_ID_ATTRIBUTE = "USER_ID_ATTRIBUTE"
