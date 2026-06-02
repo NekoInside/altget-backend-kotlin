@@ -63,6 +63,13 @@ site:
   domain: localhost:8080
   fake-account-salt: default_salt_value
   srp-session-ttl: 60
+  github-client-id: ""
+  github-client-secret: ""
+  discord-client-id: ""
+  discord-client-secret: ""
+  discord-bot-token: ""
+  discord-channel-id: ""
+  discord-channel-sponsor-role-id: ""
 
 webauthn:
   rp-id: localhost
