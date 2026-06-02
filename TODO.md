@@ -1,5 +1,5 @@
 - [ ] Alt API
-	- [ ] Key fetch
+	- [x] Key fetch
 	- [x] Web fetch \(PoW required\) \(Captcha required\)
 	- [ ] Post \(Auth required\)
 - [ ] Auth API
@@ -21,7 +21,7 @@
 	- [x] Create task
 - [ ] Coins API
 	- [ ] Redeem token
-	- [ ] Transfer credit
+	- [x] Transfer credit
     - [ ] Generate token \(Role admin required\)
 - [ ] User API
 	- [ ] Get self information

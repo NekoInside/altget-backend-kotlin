@@ -9,9 +9,9 @@ import java.time.LocalDateTime
 @TableName
 class UserCoin {
     @TableId
-    var userId: Int? = null
+    var userId: Int = 0
 
-    var balance: Int? = null
+    var balance: Int = 0
 
     @TableField(fill = FieldFill.INSERT)
     var createdAt: LocalDateTime? = null
