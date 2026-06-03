@@ -223,6 +223,10 @@ class AuthController(
             verifierHex = "00" + "00".repeat(256 - 1)
         }
 
+        if (saltHex.startsWith("MIGRATE")) {
+            return ResponseBase(400, "该账户由于安全原因需要重置密码，请点击忘记密码进行密码重置")
+        }
+
         val config = SRP6CryptoParams.getInstance(2048, "SHA-256")
         val serverSession = SRP6ServerSession(config)
 

@@ -38,7 +38,7 @@ class PoWTaskService(private val poWVerificationService: PoWVerificationService)
         difficulty += floor(recentCreatedTaskCount / 2.0).toInt()
         srcAddrTaskTime[srcIp] ?: srcAddrTaskTime.put(srcIp, mutableListOf())
         srcAddrTaskTime[srcIp]!!.add(now)
-        while (srcAddrTaskTime.size > 6)  {
+        while (srcAddrTaskTime[srcIp]!!.size > 6) {
             srcAddrTaskTime[srcIp]!!.removeAt(0)
         }
         val taskId = UUID.randomUUID().toString().replace("-", "")
