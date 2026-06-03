@@ -35,4 +35,11 @@ class CoinController(
             ResponseBase(404, "Token could not be redeemed")
         }
     }
+
+    @GetMapping("/api/coins/me")
+    fun getMyCoins(@CurrentUserId userId: Int?): ResponseBase<Int> {
+        if (userId == null) return ResponseBase(401, "Unauthorized")
+        val userCoin = userCoinService.getById(userId) ?: return ResponseBase(404, "User coin data not found")
+        return ResponseBase(userCoin.balance)
+    }
 }

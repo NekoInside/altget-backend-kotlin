@@ -26,7 +26,6 @@ dependencies {
     implementation(libs.spring.boot.starter.thymeleaf)
     implementation(libs.spring.boot.starter.webmvc)
     implementation(libs.kotlin.reflect)
-    implementation(libs.mybatis.spring.boot.starter)
     implementation(libs.mybatis.plus.spring.boot4.starter)
     implementation(libs.mybatis.plus.jsqlparser)
     implementation(libs.spring.security.webauthn)

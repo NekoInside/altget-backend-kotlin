@@ -1,9 +1,14 @@
 package ltd.guimc.web.altget.component
 
+import cn.hutool.core.date.DateUtil
 import cn.hutool.jwt.JWT
 import cn.hutool.jwt.JWTPayload
 import cn.hutool.jwt.JWTUtil
+import cn.hutool.jwt.JWTValidator
+import cn.hutool.jwt.signers.HMacJWTSigner
+import cn.hutool.jwt.signers.JWTSignerUtil
 import ltd.guimc.web.altget.config.JwtProperties
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.util.Date
 import java.util.UUID
@@ -13,6 +18,8 @@ class JwtTokenComponent(
     val jwtProperties: JwtProperties,
     val redisSessionComponent: RedisSessionComponent
 ) {
+    private val log = LoggerFactory.getLogger(JwtTokenComponent::class.java)
+
     // 半个有状态的 Session 信息保存
     fun generateLoginSession(userId: Int): String {
         var sessionId: String? = redisSessionComponent.getSession(userId)
@@ -61,7 +68,7 @@ class JwtTokenComponent(
     // 从密码重置 token 中提取唯一重置 ID（用于防重放检查）
     fun getPasswordResetIdFromToken(token: String): String? {
         try {
-            if (!JWTUtil.verify(token, jwtProperties.secret.toByteArray())) {
+            if (!isJWTVaild(token)) {
                 return null
             }
             val jwt = JWTUtil.parseToken(token)
@@ -74,14 +81,9 @@ class JwtTokenComponent(
     // 验证 JWT 是否过期 / 是否用正确的 Key 签名
     fun isJWTVaild(token: String): Boolean {
         try {
-            if (!JWTUtil.verify(token, jwtProperties.secret.toByteArray())) {
-                return false
-            }
-            val jwt = JWTUtil.parseToken(token)
-            val jwtExpires = jwt.getPayload(JWTPayload.EXPIRES_AT) as? Date ?: return false
-            if (jwtExpires.time < System.currentTimeMillis()) {
-                return false
-            }
+            JWTValidator.of(token)
+                .validateDate(DateUtil.date())
+                .validateAlgorithm(JWTSignerUtil.hs256(jwtProperties.secret.toByteArray()));
             return true
         } catch (_: Exception) {
             // token 无效或过期
@@ -91,12 +93,14 @@ class JwtTokenComponent(
 
     fun getUserIdFromToken(token: String): Int? {
         try {
-            if (!JWTUtil.verify(token, jwtProperties.secret.toByteArray())) {
+            log.error("0")
+            if (!isJWTVaild(token)) {
                 return null
             }
             val jwt = JWTUtil.parseToken(token)
             val userId = jwt.getPayload(JWTPayload.SUBJECT) as? String ?: return null
-            val jwtSessionId = jwt.getPayload(JWTPayload.AUDIENCE) as? String ?: return null
+            val jwtSessionIdList = jwt.getPayload(JWTPayload.AUDIENCE) as? List<String> ?: return null
+            val jwtSessionId = jwtSessionIdList.firstOrNull() ?: return null
             val userSessionId = redisSessionComponent.getSession(userId.toInt()) ?: return null
             if (jwtSessionId != userSessionId) {
                 return null
@@ -110,7 +114,7 @@ class JwtTokenComponent(
 
     fun getEmailFromToken(token: String): String? {
         try {
-            if (!JWTUtil.verify(token, jwtProperties.secret.toByteArray())) {
+            if (!isJWTVaild(token)) {
                 return null
             }
             val jwt = JWTUtil.parseToken(token)

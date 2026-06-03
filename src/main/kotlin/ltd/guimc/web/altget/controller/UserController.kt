@@ -8,6 +8,7 @@ import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.user.UserApiKeyInfo
 import ltd.guimc.web.altget.entity.response.user.UserInfo
 import ltd.guimc.web.altget.entity.response.user.UserOperationLogResponse
+import ltd.guimc.web.altget.enum.EnumApiLimitLevel
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.service.pow.PoWTaskService
 import ltd.guimc.web.altget.service.user.CoreAuthService
@@ -47,13 +48,13 @@ class UserController(
     private fun buildUserInfo(userId: Int): UserInfo? {
         val coreAuth = coreAuthService.getById(userId) ?: return null
         val userDetails = userDetailsService.getById(userId) ?: return null
-        val userApi = userApiService.getById(userId) ?: return null
+        val userApi = userApiService.getById(userId)
         return UserInfo(
             id = userId,
             name = coreAuth.username ?: "",
             email = coreAuth.email ?: "",
             role = userDetails.userRole,
-            apiLimitLevel = userApi.limitLevel,
+            apiLimitLevel = userApi?.limitLevel ?: EnumApiLimitLevel.LEVEL_LOW,
             registrationTime = userDetails.registerTime.toString(),
             lastLoginIp = userDetails.lastLoginIp,
             lastLoginGeo = userDetails.lastLoginGeo,

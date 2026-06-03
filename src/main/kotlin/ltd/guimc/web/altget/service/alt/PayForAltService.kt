@@ -1,6 +1,6 @@
 package ltd.guimc.web.altget.service.alt
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import ltd.guimc.web.altget.entity.db.alt.AltCategory
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.enum.EnumTransactionType
@@ -17,8 +17,8 @@ class PayForAltService(
 ) {
     @Transactional(rollbackFor = [Exception::class])
     fun payForAltAs(count: Int = 1, userId: Int): List<AltCategory> {
-        val userCoinWrapper = LambdaQueryWrapper<UserCoin>()
-            .eq(UserCoin::userId, userId)
+        val userCoinWrapper = QueryWrapper<UserCoin>()
+            .eq("user_id", userId)
             .last("FOR UPDATE")
         val userCoin = userCoinService.getOne(userCoinWrapper) ?: throw RuntimeException("用户不存在")
         if (userCoin.balance < count) {

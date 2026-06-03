@@ -5,6 +5,7 @@ import ltd.guimc.web.altget.enum.EnumUserRole
 
 data class UserInfo(val id: Int, val name: String,
                     val email: String, val role: EnumUserRole,
+                    val balance: Int,
                     val apiLimitLevel: EnumApiLimitLevel,
                     val registrationTime: String, val lastLoginIp: String,
                     val lastLoginGeo: String, val lastLoginTime: String,

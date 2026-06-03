@@ -10,7 +10,7 @@ interface AltCategoryMapper : BaseMapper<AltCategory> {
     @Select("""
         SELECT * from alt_category
         WHERE channel = #{channel}
-        ORDER BY createdAt DESC
+        ORDER BY created_at DESC
         LIMIT #{count} FOR UPDATE SKIP LOCKED
     """)
     fun popupByChannel(channel: String, count: Int): List<AltCategory>

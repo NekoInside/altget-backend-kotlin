@@ -259,8 +259,8 @@ class AuthController(
 
         try {
             val m2 = serverSession.step2(a, m1)
-            val username = serverSession.getUserID().toIntOrNull() ?: return ResponseBase(400, "服务器 SRP Session 异常")
-            val coreAuthEntity = coreAuthService.getByUsername(username.toString()) ?: return ResponseBase(400, "服务器 SRP Session 异常")
+            val username = serverSession.getUserID()
+            val coreAuthEntity = coreAuthService.getByUsername(username) ?: return ResponseBase(400, "服务器 SRP Session 异常")
             val userDetails = userDetailsService.getById(coreAuthEntity.userId) ?: return ResponseBase(400, "服务器 SRP Session 异常")
             if (userDetails.userRole == EnumUserRole.UNVERIFY) return ResponseBase(400, "账号未激活，请先激活账号")
             if (userDetails.userRole == EnumUserRole.BANNED) return ResponseBase(400, "账号已被封禁，请联系管理员")
@@ -307,7 +307,7 @@ class AuthController(
         val state = UUID.randomUUID().toString()
         val oauthUsage = if (usage == "bind") EnumOauthUsage.BIND else EnumOauthUsage.LOGIN
         // 将 state 存储在 Redis 中，设置过期时间为 10 分钟
-        objectRedisTemplate.opsForValue().set("oauth:github:state:$state", oauthUsage, Duration.ofMinutes(10))
+        objectRedisTemplate.opsForValue().set("oauth:github:state:$state", oauthUsage.name, Duration.ofMinutes(10))
         val oauthUrl = UrlBuilder.of("https://github.com/login/oauth/authorize")
             .addQuery("client_id", clientId)
             .addQuery("redirect_uri", redirectUri)
@@ -320,15 +320,16 @@ class AuthController(
 
     @GetMapping("/api/auth/github/state")
     fun getStateUsage(state: String): ResponseBase<String> {
-        return ResponseBase(if ((objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage
-                ?: return ResponseBase(400, "无效的 state")) == EnumOauthUsage.LOGIN) "login" else "bind")
+        val stored = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? String
+            ?: return ResponseBase(400, "无效的 state")
+        return ResponseBase(if (stored == EnumOauthUsage.LOGIN.name) "login" else "bind")
     }
 
     @GetMapping("/api/auth/github/login")
     fun processLoginState(code: String, state: String, @RealIP ip: String?): ResponseBase<String> {
-        val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
+        val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? String ?: return ResponseBase(400, "无效的 state")
         objectRedisTemplate.delete("oauth:github:state:$state")
-        if (storedState != EnumOauthUsage.LOGIN) {
+        if (storedState != EnumOauthUsage.LOGIN.name) {
             return ResponseBase(400, "无效的 state")
         }
         val accessToken = try {
@@ -357,9 +358,9 @@ class AuthController(
 
     @GetMapping("/api/auth/github/bind")
     fun processBindState(code: String, state: String, @CurrentUserId userId: Int?): ResponseBase<String> {
-        val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? EnumOauthUsage ?: return ResponseBase(400, "无效的 state")
+        val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? String ?: return ResponseBase(400, "无效的 state")
         objectRedisTemplate.delete("oauth:github:state:$state")
-        if (storedState != EnumOauthUsage.BIND) {
+        if (storedState != EnumOauthUsage.BIND.name) {
             return ResponseBase(400, "无效的 state")
         }
         if (userId == null) {
@@ -457,6 +458,8 @@ class AuthController(
             val challengeId = UUID.randomUUID().toString()
             val serialized = creationOptions.toJson()
             webAuthnChallengeCacheService.storeChallenge("reg:$challengeId", serialized)
+            // Store userHandle explicitly so it can't be lost during JSON round-trip
+            webAuthnChallengeCacheService.storeChallenge("reg:uh:$challengeId", userHandleB64)
 
             return ResponseBase(
                 PasskeyOptionsResponse(
@@ -492,12 +495,18 @@ class AuthController(
 
             val result: RegistrationResult = relyingParty.finishRegistration(finishOptions)
 
+            // Retrieve the exact userHandle that was sent to the authenticator during
+            // passkeyRegisterOptions. We store it explicitly in Redis to avoid any
+            // potential JSON round-trip issues with creationOptions.user.id.
+            val userHandleB64 = webAuthnChallengeCacheService.consumeChallenge("reg:uh:${request.challengeId}")
+                ?: creationOptions.user.id.base64Url
+
             val entity = PasskeyCredentialEntity().apply {
                 this.userId = uid
                 credentialId = result.keyId.id.base64Url
                 publicKeyCose = result.publicKeyCose.base64Url
                 signatureCount = result.signatureCount
-                userHandle = passkeyCredentialService.getOrCreateUserHandle(uid)
+                userHandle = userHandleB64
                 credentialName = request.name ?: "My Passkey"
                 discoverable = result.isDiscoverable.orElse(false) ?: false
                 createdAt = LocalDateTime.now()
@@ -605,11 +614,11 @@ class AuthController(
             userOperationService.log(user.userId, EnumUserOperation.PASSKEY_LOGIN, "Passkey登录")
             ResponseBase(webToken)
         } catch (e: AssertionFailedException) {
-            log.error("Passkey authentication failed", e)
-            ResponseBase(400, "Passkey authentication failed")
+            log.error("Passkey assertion failed: {}", e.message, e)
+            ResponseBase(400, "Passkey authentication failed: ${e.message}")
         } catch (e: Exception) {
-            log.error("Failed to parse passkey assertion response", e)
-            ResponseBase(400, "Invalid credential data")
+            log.error("Failed to parse passkey assertion response: {}", e.message, e)
+            ResponseBase(400, "Invalid credential data: ${e.message}")
         }
     }
 

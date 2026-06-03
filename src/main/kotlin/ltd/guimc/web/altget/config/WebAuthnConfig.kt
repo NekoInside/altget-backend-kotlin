@@ -8,7 +8,8 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 class WebAuthnConfig(
-    private val webauthnProperties: WebAuthnProperties
+    private val webauthnProperties: WebAuthnProperties,
+    private val passkeyCredentialRepository: PasskeyCredentialRepository
 ) {
 
     @Bean
@@ -20,7 +21,7 @@ class WebAuthnConfig(
 
         return RelyingParty.builder()
             .identity(rpIdentity)
-            .credentialRepository(PasskeyCredentialRepository())
+            .credentialRepository(passkeyCredentialRepository)
             .origins(setOf("https://${siteProperities.domain}"))
             .build()
     }

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.entity.db.alt.AltConsumptionRecord
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
+import ltd.guimc.web.altget.entity.db.coin.UserCoin
+import ltd.guimc.web.altget.entity.db.user.CoreAuth
 import ltd.guimc.web.altget.entity.db.user.UserOperation
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.PageResponse
@@ -12,6 +14,7 @@ import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
 import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
 import ltd.guimc.web.altget.entity.response.user.SimpleUserInfo
 import ltd.guimc.web.altget.entity.response.user.UserInfo
+import ltd.guimc.web.altget.enum.EnumApiLimitLevel
 import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
@@ -60,13 +63,15 @@ class AdminController(
     private fun buildUserInfo(userId: Int): UserInfo? {
         val coreAuth = coreAuthService.getById(userId) ?: return null
         val userDetails = userDetailsService.getById(userId) ?: return null
-        val userApi = userApiService.getById(userId) ?: return null
+        val userApi = userApiService.getById(userId)
+        val userCoin = userCoinService.getById(userId)
         return UserInfo(
             id = userId,
             name = coreAuth.username ?: "",
             email = coreAuth.email ?: "",
             role = userDetails.userRole,
-            apiLimitLevel = userApi.limitLevel,
+            balance = userCoin?.balance ?: 0,
+            apiLimitLevel = userApi?.limitLevel ?: EnumApiLimitLevel.LEVEL_LOW,
             registrationTime = userDetails.registerTime.toString(),
             lastLoginIp = userDetails.lastLoginIp,
             lastLoginGeo = userDetails.lastLoginGeo,
@@ -99,9 +104,26 @@ class AdminController(
 
     // <editor-fold desc="List Users">
     @GetMapping("/api/admin/users")
-    fun listUsers(@CurrentUserId userId: Int?, @RequestParam size: Int = 20, @RequestParam page: Int = 1): ResponseBase<PageResponse<SimpleUserInfo>> {
+    fun listUsers(
+        @CurrentUserId userId: Int?,
+        @RequestParam size: Int = 20,
+        @RequestParam page: Int = 1,
+        @RequestParam(required = false) keyword: String?
+    ): ResponseBase<PageResponse<SimpleUserInfo>> {
         requireAdmin<PageResponse<SimpleUserInfo>>(userId)?.let { return it }
-        val pageResult = coreAuthService.getPage(page, size)
+        val normalizedKeyword = keyword?.trim()
+        val queryWrapper = QueryWrapper<CoreAuth>().apply {
+            if (!normalizedKeyword.isNullOrEmpty()) {
+                nested { wrapper ->
+                    normalizedKeyword.toIntOrNull()?.let { wrapper.eq("user_id", it).or() }
+                    wrapper.like("username", normalizedKeyword)
+                        .or()
+                        .like("email", normalizedKeyword)
+                }
+            }
+            orderByDesc("user_id")
+        }
+        val pageResult = coreAuthService.getPage(page, size, queryWrapper)
         val userInfoList = pageResult.records.mapNotNull { coreAuth ->
             buildSimpleUserInfo(coreAuth.userId)
         }
@@ -165,11 +187,18 @@ class AdminController(
     fun addCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         if (amount <= 0) return ResponseBase(400, "Amount must be positive")
+        if (coreAuthService.getById(targetUserId) == null) return ResponseBase(404, "User not found")
         val userCoin = userCoinService.getById(targetUserId)
-            ?: return ResponseBase(404, "User not found")
-        userCoinService.updateById(userCoin.apply {
-            balance += amount
-        })
+        if (userCoin == null) {
+            userCoinService.save(UserCoin().apply {
+                this.userId = targetUserId
+                this.balance = amount
+            })
+        } else {
+            userCoinService.updateById(userCoin.apply {
+                balance += amount
+            })
+        }
         coinTransactionHistoryService.logTransaction(
             userId = targetUserId,
             amount = amount,

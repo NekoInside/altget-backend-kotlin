@@ -2,6 +2,7 @@ package ltd.guimc.web.altget.component
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
 
@@ -13,6 +14,8 @@ class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent) : Han
         const val REAL_IP_ATTRIBUTE = "REAL_IP_ATTRIBUTE"
     }
 
+    private val log = LoggerFactory.getLogger(RequestInterceptor::class.java)
+
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         val token = request.getHeader("X-Ciallo-Auth")
 
@@ -23,8 +26,7 @@ class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent) : Han
             }
         }
 
-        // we're currently not using CDN, so we can directly get the real IP from the request
-        val realIp = request.remoteAddr
+        val realIp = request.getHeader("X-Real-IP")?.takeIf { it.isNotBlank() } ?: request.remoteAddr
         request.setAttribute(REAL_IP_ATTRIBUTE, realIp)
 
         return true

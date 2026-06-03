@@ -1,5 +1,6 @@
 package ltd.guimc.web.altget.service.user
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import ltd.guimc.web.altget.entity.db.user.UserOperation
 import ltd.guimc.web.altget.enum.EnumUserOperation
@@ -24,6 +25,6 @@ class UserOperationService(private val coreAuthMapper: CoreAuthMapper) : Service
     }
 
     fun removeByUserId(userId: Int) {
-        remove(query().eq("user_id", userId))
+        remove(QueryWrapper<UserOperation>().eq("user_id", userId))
     }
 }

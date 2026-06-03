@@ -1,5 +1,6 @@
 package ltd.guimc.web.altget.service.coin
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import ltd.guimc.web.altget.enum.EnumTransactionType
@@ -17,10 +18,9 @@ class CoinTokenService(
 ) : ServiceImpl<CoinTokenMapper, CoinToken>(), IPageService<CoinToken> {
     @Transactional(rollbackFor = [Exception::class])
     fun redeemTokenForUser(token: String, userIn: Int): Boolean {
-        val token = query()
+        val token = getOne(QueryWrapper<CoinToken>()
             .eq("token", token)
-            .last("FOR UPDATE")
-            .one()
+            .last("FOR UPDATE"))
         if (token == null || token.redeemedBy != null) return false
         val userCoin = userCoinService.getById(userIn) ?: return false
         userCoinService.updateById(userCoin.apply {

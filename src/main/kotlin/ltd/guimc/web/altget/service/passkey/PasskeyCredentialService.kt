@@ -1,5 +1,6 @@
 package ltd.guimc.web.altget.service.passkey
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import ltd.guimc.web.altget.entity.db.passkey.PasskeyCredentialEntity
 import ltd.guimc.web.altget.mapper.db.passkey.PasskeyCredentialMapper
@@ -12,18 +13,16 @@ class PasskeyCredentialService : ServiceImpl<PasskeyCredentialMapper, PasskeyCre
      * Get a passkey credential by its WebAuthn credential ID (base64url).
      */
     fun getByCredentialId(credentialId: String): PasskeyCredentialEntity? {
-        return lambdaQuery()
-            .eq(PasskeyCredentialEntity::credentialId, credentialId)
-            .one()
+        return getOne(QueryWrapper<PasskeyCredentialEntity>()
+            .eq("credential_id", credentialId))
     }
 
     /**
      * Get all passkey credentials for a user.
      */
     fun getCredentialsByUserId(userId: Int): List<PasskeyCredentialEntity> {
-        return lambdaQuery()
-            .eq(PasskeyCredentialEntity::userId, userId)
-            .list()
+        return list(QueryWrapper<PasskeyCredentialEntity>()
+            .eq("user_id", userId))
     }
 
     /**
@@ -48,6 +47,14 @@ class PasskeyCredentialService : ServiceImpl<PasskeyCredentialMapper, PasskeyCre
         val entity = getById(id) ?: return
         entity.signatureCount = newCount
         updateById(entity)
+    }
+
+    /**
+     * Find a passkey credential by its user handle (base64url).
+     */
+    fun getByUserHandle(userHandle: String): PasskeyCredentialEntity? {
+        return getOne(QueryWrapper<PasskeyCredentialEntity>()
+            .eq("user_handle", userHandle))
     }
 
     /**
