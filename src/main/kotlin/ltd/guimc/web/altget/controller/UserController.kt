@@ -10,6 +10,7 @@ import ltd.guimc.web.altget.entity.response.user.UserInfo
 import ltd.guimc.web.altget.entity.response.user.UserOperationLogResponse
 import ltd.guimc.web.altget.enum.EnumApiLimitLevel
 import ltd.guimc.web.altget.enum.EnumUserOperation
+import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.pow.PoWTaskService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserApiService
@@ -30,7 +31,8 @@ class UserController(
     private val userApiService: UserApiService,
     private val userOperationService: UserOperationService,
     private val geetestVerifyComponent: GeetestVerifyComponent,
-    private val poWTaskService: PoWTaskService
+    private val poWTaskService: PoWTaskService,
+    private val userCoinService: UserCoinService
 ) {
     // <editor-fold desc="Helper">
 
@@ -49,11 +51,13 @@ class UserController(
         val coreAuth = coreAuthService.getById(userId) ?: return null
         val userDetails = userDetailsService.getById(userId) ?: return null
         val userApi = userApiService.getById(userId)
+        val userCoin = userCoinService.getById(userId)
         return UserInfo(
             id = userId,
             name = coreAuth.username ?: "",
             email = coreAuth.email ?: "",
             role = userDetails.userRole,
+            balance = userCoin?.balance ?: 0,
             apiLimitLevel = userApi?.limitLevel ?: EnumApiLimitLevel.LEVEL_LOW,
             registrationTime = userDetails.registerTime.toString(),
             lastLoginIp = userDetails.lastLoginIp,
