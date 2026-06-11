@@ -8,5 +8,7 @@ data class AdminOperationLogResponse(
     val userId: Int?,
     val username: String?,
     val operation: EnumUserOperation,
-    val description: String
+    val description: String,
+    val ip: String?,
+    val geoip: String?
 )

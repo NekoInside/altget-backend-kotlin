@@ -20,4 +20,8 @@ class UserOperation {
     var operation: EnumUserOperation? = null
 
     var description: String? = null
+
+    var ip: String? = null
+
+    var geoip: String? = null
 }

@@ -35,7 +35,7 @@ class AltController(
     private val sauthService: ltd.guimc.web.altget.service.sauth.SauthService
 ) {
     @GetMapping("/api/alt", params = ["userApiKey"])
-    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1): ResponseBase<List<String>> {
+    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1, @RealIP ip: String): ResponseBase<List<String>> {
         if (!paid && count != 1) return ResponseBase(400, "Not allowed")
         if (count <= 0) return ResponseBase(400, "Invalid count wanted")
         val userApi = try {
@@ -53,7 +53,7 @@ class AltController(
                     result += "$username----$password"
                 }
                 val logMsg = "Fetched $count alts via paid API"
-                userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg)
+                userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg, ip = ip)
                 return ResponseBase(result)
             } catch (e: RuntimeException) {
                 return ResponseBase(400, e.message ?: "Error occurred")
@@ -70,7 +70,7 @@ class AltController(
                 limitLevel = limitLevel.getHigherLimitLevel()
             })
         }
-        userOperationService.log(userApi.userId, EnumUserOperation.API_FETCH, "Fetched alt via API")
+        userOperationService.log(userApi.userId, EnumUserOperation.API_FETCH, "Fetched alt via API", ip = ip)
         userDetailsService.updateById(userDetail.apply {
             dailyUserApiFetched += 1
             totalUserApiFetched += 1
@@ -104,13 +104,15 @@ class AltController(
         }
         val alt = data[0]
         if (userId != null) {
-            userOperationService.log(userId, EnumUserOperation.WEB_FETCH, "Fetched alt ${alt.username}----${alt.password} via web channel '$channel'")
+            userOperationService.log(userId, EnumUserOperation.WEB_FETCH, "Fetched alt ${alt.username}----${alt.password} via web channel '$channel'", ip = ip)
             userDetailsService.updateById(userDetailsService.getById(userId)?.apply {
                 dailyWebFetched += 1
                 totalWebFetched += 1
                 dailyAltFetched += 1
                 totalAltFetched += 1
             })
+        } else {
+            userOperationService.logAnonymous(EnumUserOperation.WEB_FETCH, "Fetched alt ${alt.username}----${alt.password} via web channel '$channel'", ip = ip)
         }
         return ResponseBase("${alt.username}----${alt.password}")
     }
@@ -131,7 +133,7 @@ class AltController(
     }
 
     @GetMapping("/api/alt/convert/gen")
-    fun generateSauth(userApiKey: String): ResponseBase<SauthGenerateResponse> {
+    fun generateSauth(userApiKey: String, @RealIP ip: String): ResponseBase<SauthGenerateResponse> {
         val userApi = try {
             userApiService.getByApiKey(userApiKey)
         } catch (_: Exception) {
@@ -142,7 +144,7 @@ class AltController(
             val data = payForAltService.payForAltAs(1, userApi.userId)
             if (data.isEmpty()) throw RuntimeException("No alt available")
             val logMsg = "Fetched 1 alt with sauth via paid API"
-            userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg)
+            userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg, ip = ip)
             val sauth = sauthService.doLogin(data[0].username!!, data[0].password!!)
             if (sauth["success"] as? Boolean != true) {
                 throw RuntimeException(sauth["message"] as? String ?: "Sauth service error")
@@ -156,7 +158,7 @@ class AltController(
 
     @GetMapping("/api/alt/convert/sauth")
     fun convertSauth(@CurrentUserId userId: Int?, @RequestParam(required = false) userApiKey: String?,
-                     username: String, password: String): ResponseBase<String> {
+                     username: String, password: String, @RealIP ip: String): ResponseBase<String> {
         // Resolve userId from session or API key
         val resolvedUserId: Int
         if (!userApiKey.isNullOrBlank()) {
@@ -176,7 +178,7 @@ class AltController(
             val success = result["success"] as? Boolean ?: false
             val message = result["message"] as? String ?: "未知错误"
             val sauthJson = result["sauthJson"] as? String
-            userOperationService.log(resolvedUserId, EnumUserOperation.API_FETCH, "Sauth convert: $message")
+            userOperationService.log(resolvedUserId, EnumUserOperation.API_FETCH, "Sauth convert: $message", ip = ip)
             if (success) {
                 ResponseBase(sauthJson ?: message)
             } else {

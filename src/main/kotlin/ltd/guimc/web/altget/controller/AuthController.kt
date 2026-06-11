@@ -181,7 +181,7 @@ class AuthController(
 
     @PostMapping("/api/auth/reset-password")
     @Transactional
-    fun resetPassword(@RequestBody request: ResetPasswordRequest): ResponseBase<String> {
+    fun resetPassword(@RequestBody request: ResetPasswordRequest, @RealIP ip: String): ResponseBase<String> {
         // 提取并校验防重放标识：每个 token 只能使用一次
         val resetId = jwtTokenComponent.getPasswordResetIdFromToken(request.token)
             ?: return ResponseBase(400, "无效的重置链接")
@@ -200,7 +200,7 @@ class AuthController(
             srpSalt = request.salt
             srpVerifier = request.verifier
         })
-        userOperationService.log(coreAuth.userId, EnumUserOperation.PASSWORD_RESET, "通过邮箱重置密码")
+        userOperationService.log(coreAuth.userId, EnumUserOperation.PASSWORD_RESET, "通过邮箱重置密码", ip = ip)
         return ResponseBase("密码重置成功，您现在可以使用新密码登录了")
     }
     // </editor-fold>
@@ -271,10 +271,12 @@ class AuthController(
             // 更新最后登录信息
             userDetails.lastLoginTime = LocalDateTime.now()
             userDetails.lastLoginIp = ip ?: ""
-            userDetails.lastLoginGeo = if (!ip.isNullOrBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(ip)) else ""
+            val effectiveIp = ip ?: ""
+            val geoip = if (effectiveIp.isNotBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(effectiveIp)) else ""
+            userDetails.lastLoginGeo = geoip
             userDetailsService.updateById(userDetails)
             val jwtToken = jwtTokenComponent.generateLoginSession(coreAuthEntity.userId)
-            userOperationService.log(coreAuthEntity.userId, EnumUserOperation.LOGIN, "账号密码登录")
+            userOperationService.log(coreAuthEntity.userId, EnumUserOperation.LOGIN, "账号密码登录", ip = effectiveIp)
             return ResponseBase(LoginVerifyResponse(m2.toString(16), jwtToken))
         } catch (_: Exception) {
             return ResponseBase(400, "用户名或密码错误")
@@ -353,15 +355,17 @@ class AuthController(
         // 更新最后登录信息
         userDetails.lastLoginTime = LocalDateTime.now()
         userDetails.lastLoginIp = ip ?: ""
-        userDetails.lastLoginGeo = if (!ip.isNullOrBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(ip)) else ""
+        val effectiveIp = ip ?: ""
+        val geoip = if (effectiveIp.isNotBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(effectiveIp)) else ""
+        userDetails.lastLoginGeo = geoip
         userDetailsService.updateById(userDetails)
         val jwtToken = jwtTokenComponent.generateLoginSession(userId)
-        userOperationService.log(userId, EnumUserOperation.LOGIN, "Github OAuth 登录")
+        userOperationService.log(userId, EnumUserOperation.LOGIN, "Github OAuth 登录", ip = effectiveIp)
         return ResponseBase(jwtToken)
     }
 
     @GetMapping("/api/auth/github/bind")
-    fun processBindState(code: String, state: String, @CurrentUserId userId: Int?): ResponseBase<String> {
+    fun processBindState(code: String, state: String, @CurrentUserId userId: Int?, @RealIP ip: String): ResponseBase<String> {
         val storedState = objectRedisTemplate.opsForValue().get("oauth:github:state:$state") as? String ?: return ResponseBase(400, "无效的 state")
         objectRedisTemplate.delete("oauth:github:state:$state")
         if (storedState != EnumOauthUsage.BIND.name) {
@@ -384,7 +388,7 @@ class AuthController(
             return ResponseBase(400, "该 GitHub 账号已绑定账号")
         }
         userOauthService.setGithubId(userId, githubUserId)
-        userOperationService.log(userId, EnumUserOperation.OAUTH_BIND, "Github OAuth 绑定")
+        userOperationService.log(userId, EnumUserOperation.OAUTH_BIND, "Github OAuth 绑定", ip = ip)
         return ResponseBase(200, "OK")
     }
 
@@ -480,7 +484,8 @@ class AuthController(
     @PostMapping("/api/auth/passkey/register/verify")
     fun passkeyRegisterVerify(
         @CurrentUserId userId: Int?,
-        @RequestBody request: PasskeyRegisterVerifyRequest
+        @RequestBody request: PasskeyRegisterVerifyRequest,
+        @RealIP ip: String
     ): ResponseBase<String> {
         requirePasskeyAuth<String>(userId)?.let { return it }
         val uid = userId!!
@@ -517,7 +522,7 @@ class AuthController(
             }
             passkeyCredentialService.save(entity)
 
-            userOperationService.log(uid, EnumUserOperation.PASSKEY_REGISTER, "Passkey注册")
+            userOperationService.log(uid, EnumUserOperation.PASSKEY_REGISTER, "Passkey注册", ip = ip)
             ResponseBase("Passkey registered successfully")
         } catch (e: RegistrationFailedException) {
             log.error("Passkey registration failed", e)
@@ -610,12 +615,14 @@ class AuthController(
             // Update last login info
             userDetails.lastLoginTime = LocalDateTime.now()
             userDetails.lastLoginIp = ip ?: ""
-            userDetails.lastLoginGeo = if (!ip.isNullOrBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(ip)) else ""
+            val effectiveIp = ip ?: ""
+            val geoip = if (effectiveIp.isNotBlank()) geolocationService.formatLocationMessage(geolocationService.getGeolocation(effectiveIp)) else ""
+            userDetails.lastLoginGeo = geoip
             userDetailsService.updateById(userDetails)
 
             // Issue token
             val webToken = jwtTokenComponent.generateLoginSession(user.userId)
-            userOperationService.log(user.userId, EnumUserOperation.PASSKEY_LOGIN, "Passkey登录")
+            userOperationService.log(user.userId, EnumUserOperation.PASSKEY_LOGIN, "Passkey登录", ip = effectiveIp)
             ResponseBase(webToken)
         } catch (e: AssertionFailedException) {
             log.error("Passkey assertion failed: {}", e.message, e)

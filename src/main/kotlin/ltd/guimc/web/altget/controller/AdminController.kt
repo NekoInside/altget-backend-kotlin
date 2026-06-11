@@ -2,6 +2,7 @@ package ltd.guimc.web.altget.controller
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.entity.db.alt.AltConsumptionRecord
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
@@ -150,7 +151,7 @@ class AdminController(
     // <editor-fold desc="Ban / Unban">
     @PostMapping("/api/admin/user/{targetUserId}/ban")
     @Transactional
-    fun banUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<String> {
+    fun banUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RealIP ip: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         val userDetails = userDetailsService.getById(targetUserId)
             ?: return ResponseBase(404, "User not found")
@@ -161,13 +162,13 @@ class AdminController(
         userDetailsService.updateById(userDetails.apply {
             userRole = EnumUserRole.BANNED
         })
-        userOperationService.log(userId!!, EnumUserOperation.ADMIN_BAN, "Banned user $targetUserId")
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_BAN, "Banned user $targetUserId", ip = ip)
         return ResponseBase("User banned successfully")
     }
 
     @PostMapping("/api/admin/user/{targetUserId}/unban")
     @Transactional
-    fun unbanUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<String> {
+    fun unbanUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RealIP ip: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         val userDetails = userDetailsService.getById(targetUserId)
             ?: return ResponseBase(404, "User not found")
@@ -176,7 +177,7 @@ class AdminController(
         userDetailsService.updateById(userDetails.apply {
             userRole = EnumUserRole.VERIFY
         })
-        userOperationService.log(userId!!, EnumUserOperation.ADMIN_UNBAN, "Unbanned user $targetUserId")
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_UNBAN, "Unbanned user $targetUserId", ip = ip)
         return ResponseBase("User unbanned successfully")
     }
     // </editor-fold>
@@ -184,7 +185,7 @@ class AdminController(
     // <editor-fold desc="Add / Subtract Credit">
     @PostMapping("/api/admin/user/{targetUserId}/credit/add")
     @Transactional
-    fun addCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
+    fun addCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int, @RealIP ip: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         if (amount <= 0) return ResponseBase(400, "Amount must be positive")
         if (coreAuthService.getById(targetUserId) == null) return ResponseBase(404, "User not found")
@@ -204,13 +205,13 @@ class AdminController(
             amount = amount,
             type = EnumTransactionType.ADMIN_ADD
         )
-        userOperationService.log(userId!!, EnumUserOperation.ADMIN_CREDIT_ADD, "Added $amount credits to user $targetUserId")
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_CREDIT_ADD, "Added $amount credits to user $targetUserId", ip = ip)
         return ResponseBase("Successfully added $amount credits to user $targetUserId")
     }
 
     @PostMapping("/api/admin/user/{targetUserId}/credit/subtract")
     @Transactional
-    fun subtractCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int): ResponseBase<String> {
+    fun subtractCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int, @RealIP ip: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         if (amount <= 0) return ResponseBase(400, "Amount must be positive")
         val userCoin = userCoinService.getById(targetUserId)
@@ -225,7 +226,7 @@ class AdminController(
             amount = -amount,
             type = EnumTransactionType.ADMIN_SUBTRACT
         )
-        userOperationService.log(userId!!, EnumUserOperation.ADMIN_CREDIT_SUBTRACT, "Subtracted $amount credits from user $targetUserId")
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_CREDIT_SUBTRACT, "Subtracted $amount credits from user $targetUserId", ip = ip)
         return ResponseBase("Successfully subtracted $amount credits from user $targetUserId")
     }
     // </editor-fold>
@@ -233,7 +234,7 @@ class AdminController(
     // <editor-fold desc="Generate Tokens">
     @PostMapping("/api/admin/token/generate")
     @Transactional
-    fun generateTokens(@CurrentUserId userId: Int?, @RequestParam tokenAmount: Int, @RequestParam coinAmount: Int): ResponseBase<List<String>> {
+    fun generateTokens(@CurrentUserId userId: Int?, @RequestParam tokenAmount: Int, @RequestParam coinAmount: Int, @RealIP ip: String): ResponseBase<List<String>> {
         requireAdmin<List<String>>(userId)?.let { return it }
         if (tokenAmount <= 0) return ResponseBase(400, "Token amount must be positive")
         if (coinAmount <= 0) return ResponseBase(400, "Coin amount must be positive")
@@ -246,7 +247,7 @@ class AdminController(
             coinTokenService.save(token)
             token.id
         }
-        userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_GENERATE, "Generated $tokenAmount tokens with $coinAmount coins each")
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_GENERATE, "Generated $tokenAmount tokens with $coinAmount coins each", ip = ip)
         return ResponseBase(tokens)
     }
     // </editor-fold>
@@ -284,12 +285,12 @@ class AdminController(
     // <editor-fold desc="Remove Token">
     @PostMapping("/api/admin/token/{tokenId}/remove")
     @Transactional
-    fun removeToken(@CurrentUserId userId: Int?, @PathVariable tokenId: String): ResponseBase<String> {
+    fun removeToken(@CurrentUserId userId: Int?, @PathVariable tokenId: String, @RealIP ip: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         val token = coinTokenService.getById(tokenId)
             ?: return ResponseBase(404, "Token not found")
         coinTokenService.removeById(tokenId)
-        userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_REMOVE, "Removed token $tokenId (coinAmount=${token.coinAmount}, isUsed=${token.isUsed})")
+        userOperationService.log(userId!!, EnumUserOperation.ADMIN_TOKEN_REMOVE, "Removed token $tokenId (coinAmount=${token.coinAmount}, isUsed=${token.isUsed})", ip = ip)
         return ResponseBase("Token removed successfully")
     }
     // </editor-fold>
@@ -320,7 +321,9 @@ class AdminController(
                 userId = op.userId,
                 username = op.username ?: "",
                 operation = op.operation ?: EnumUserOperation.LOGIN,
-                description = op.description ?: ""
+                description = op.description ?: "",
+                ip = op.ip,
+                geoip = op.geoip
             )
         }
         return ResponseBase(PageResponse(

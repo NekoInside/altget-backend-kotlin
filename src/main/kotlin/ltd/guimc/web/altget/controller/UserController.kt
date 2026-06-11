@@ -1,6 +1,7 @@
 package ltd.guimc.web.altget.controller
 
 import ltd.guimc.web.altget.annotations.CurrentUserId
+import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.entity.db.user.UserApi
 import ltd.guimc.web.altget.entity.request.user.ApiKeyRequest
@@ -134,7 +135,7 @@ class UserController(
     // <editor-fold desc="New User API Key">
     @PostMapping("/api/user/self/api-key/new")
     @Transactional
-    fun newApiKey(@CurrentUserId userId: Int?, @RequestBody request: ApiKeyRequest): ResponseBase<UserApiKeyInfo> {
+    fun newApiKey(@CurrentUserId userId: Int?, @RequestBody request: ApiKeyRequest, @RealIP ip: String): ResponseBase<UserApiKeyInfo> {
         requireAuth<UserApiKeyInfo>(userId)?.let { return it }
         verifyPoWAndCaptcha<UserApiKeyInfo>(request, "new-api")?.let { return it }
 
@@ -150,7 +151,7 @@ class UserController(
                 this.apiKey = newApiKey
             })
         }
-        userOperationService.log(userId, EnumUserOperation.API_KEY_NEW, "Created new API key")
+        userOperationService.log(userId, EnumUserOperation.API_KEY_NEW, "Created new API key", ip = ip)
         val updatedApi = userApiService.getById(userId)
             ?: return ResponseBase(500, "Failed to create API key")
         return ResponseBase(UserApiKeyInfo(
@@ -163,7 +164,7 @@ class UserController(
     // <editor-fold desc="Rotate User API Key">
     @PostMapping("/api/user/self/api-key/rotate")
     @Transactional
-    fun rotateApiKey(@CurrentUserId userId: Int?, @RequestBody request: ApiKeyRequest): ResponseBase<UserApiKeyInfo> {
+    fun rotateApiKey(@CurrentUserId userId: Int?, @RequestBody request: ApiKeyRequest, @RealIP ip: String): ResponseBase<UserApiKeyInfo> {
         requireAuth<UserApiKeyInfo>(userId)?.let { return it }
         verifyPoWAndCaptcha<UserApiKeyInfo>(request, "new-api")?.let { return it }
 
@@ -173,7 +174,7 @@ class UserController(
         userApiService.updateById(existingApi.apply {
             apiKey = newApiKey
         })
-        userOperationService.log(userId, EnumUserOperation.API_KEY_ROTATE, "Rotated API key")
+        userOperationService.log(userId, EnumUserOperation.API_KEY_ROTATE, "Rotated API key", ip = ip)
         val updatedApi = userApiService.getById(userId)
             ?: return ResponseBase(500, "Failed to rotate API key")
         return ResponseBase(UserApiKeyInfo(
