@@ -6,6 +6,7 @@ import ltd.guimc.web.altget.component.DiscordApiService
 import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.entity.request.CaptchaRequest
 import ltd.guimc.web.altget.entity.response.ResponseBase
+import ltd.guimc.web.altget.entity.response.sauth.SauthGenerateResponse
 import ltd.guimc.web.altget.enum.EnumApiLimitLevel
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.service.alt.AltService
@@ -34,10 +35,8 @@ class AltController(
     private val sauthService: ltd.guimc.web.altget.service.sauth.SauthService
 ) {
     @GetMapping("/api/alt", params = ["userApiKey"])
-    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1, toSauth: Boolean = false): ResponseBase<List<String>> {
+    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1): ResponseBase<List<String>> {
         if (!paid && count != 1) return ResponseBase(400, "Not allowed")
-        if (!paid && toSauth) return ResponseBase(400, "Not allowed")
-        if (toSauth && count != 1) return ResponseBase(400, "Not allowed")
         if (count <= 0) return ResponseBase(400, "Invalid count wanted")
         val userApi = try {
             userApiService.getByApiKey(userApiKey)
@@ -51,29 +50,9 @@ class AltController(
                 data.forEach { alt ->
                     val username = alt.username ?: ""
                     val password = alt.password ?: ""
-                    if (toSauth) {
-                        // Deduct extra 1 coin for sauth conversion (short transaction, no HTTP)
-                        altService.deductCoinForSauth(userApi.userId)
-                        try {
-                            val sauthResult = sauthService.doLogin(username, password)
-                            val sauthJson = sauthResult["sauthJson"] as? String
-                            if (sauthResult["success"] as? Boolean == true) {
-                                result += "$username----$password----${sauthJson ?: ""}"
-                            } else {
-                                // Sauth returned failure, refund the extra coin
-                                altService.refundCoinForSauth(userApi.userId)
-                                result += "$username----$password----error"
-                            }
-                        } catch (_: Exception) {
-                            // HTTP call failed, refund the extra coin
-                            altService.refundCoinForSauth(userApi.userId)
-                            result += "$username----$password----error"
-                        }
-                    } else {
-                        result += "$username----$password"
-                    }
+                    result += "$username----$password"
                 }
-                val logMsg = if (toSauth) "Fetched $count alts with sauth via paid API" else "Fetched $count alts via paid API"
+                val logMsg = "Fetched $count alts via paid API"
                 userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg)
                 return ResponseBase(result)
             } catch (e: RuntimeException) {
@@ -149,6 +128,30 @@ class AltController(
 
     fun meetAnonymousRequirement(ip: String): Boolean {
         return geolocationService.getGeolocation(ip).countryName == "China"
+    }
+
+    @GetMapping("/api/alt/convert/gen")
+    fun generateSauth(userApiKey: String): ResponseBase<SauthGenerateResponse> {
+        val userApi = try {
+            userApiService.getByApiKey(userApiKey)
+        } catch (_: Exception) {
+            return ResponseBase(400, "Invalid api key")
+        }
+        altService.deductCoinForSauth(userApi.userId)
+        try {
+            val data = payForAltService.payForAltAs(1, userApi.userId)
+            if (data.isEmpty()) throw RuntimeException("No alt available")
+            val logMsg = "Fetched 1 alt with sauth via paid API"
+            userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg)
+            val sauth = sauthService.doLogin(data[0].username!!, data[0].password!!)
+            if (sauth["success"] as? Boolean != true) {
+                throw RuntimeException(sauth["message"] as? String ?: "Sauth service error")
+            }
+            return ResponseBase(SauthGenerateResponse(data[0].username!!, data[0].password!!, sauth["sauthJson"] as? String ?: ""))
+        } catch (e: RuntimeException) {
+            altService.deductCoinForSauth(userApi.userId)
+            return ResponseBase(400, e.message ?: "Error occurred")
+        }
     }
 
     @GetMapping("/api/alt/convert/sauth")
