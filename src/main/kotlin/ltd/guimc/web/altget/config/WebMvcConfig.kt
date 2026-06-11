@@ -5,6 +5,7 @@ import ltd.guimc.web.altget.component.RealIPArgumentResolver
 import ltd.guimc.web.altget.component.RequestInterceptor
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
+import org.springframework.web.servlet.config.annotation.CorsRegistry
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
@@ -22,5 +23,14 @@ class WebMvcConfig(
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
         resolvers.add(currentUserIdArgumentResolver)
         resolvers.add(realIPArgumentResolver)
+    }
+
+    override fun addCorsMappings(registry: CorsRegistry) {
+        registry.addMapping("/**")
+            .allowedOriginPatterns("*")
+            .allowedMethods("*")
+            .allowedHeaders("*")
+            .allowCredentials(true)
+            .maxAge(3600)
     }
 }
