@@ -19,7 +19,7 @@ class CoinTokenService(
     @Transactional(rollbackFor = [Exception::class])
     fun redeemTokenForUser(token: String, userIn: Int): Boolean {
         val token = getOne(QueryWrapper<CoinToken>()
-            .eq("token", token)
+            .eq("id", token)
             .last("FOR UPDATE"))
         if (token == null || token.redeemedBy != null) return false
         val userCoin = userCoinService.getById(userIn) ?: return false

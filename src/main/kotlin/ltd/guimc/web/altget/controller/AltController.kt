@@ -16,8 +16,6 @@ import ltd.guimc.web.altget.service.user.UserApiService
 import ltd.guimc.web.altget.service.user.UserDetailsService
 import ltd.guimc.web.altget.service.user.UserOperationService
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDateTime
@@ -32,11 +30,14 @@ class AltController(
     private val userApiService: UserApiService,
     private val payForAltService: PayForAltService,
     private val userOperationService: UserOperationService,
-    private val geolocationService: GeolocationService
+    private val geolocationService: GeolocationService,
+    private val sauthService: ltd.guimc.web.altget.service.sauth.SauthService
 ) {
     @GetMapping("/api/alt", params = ["userApiKey"])
-    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1): ResponseBase<List<String>> {
+    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1, toSauth: Boolean = false): ResponseBase<List<String>> {
         if (!paid && count != 1) return ResponseBase(400, "Not allowed")
+        if (!paid && toSauth) return ResponseBase(400, "Not allowed")
+        if (toSauth && count != 1) return ResponseBase(400, "Not allowed")
         if (count <= 0) return ResponseBase(400, "Invalid count wanted")
         val userApi = try {
             userApiService.getByApiKey(userApiKey)
@@ -47,10 +48,33 @@ class AltController(
             try {
                 val data = payForAltService.payForAltAs(count, userApi.userId)
                 val result = mutableListOf<String>()
-                data.forEach {
-                    result += "${it.username}----${it.password}"
+                data.forEach { alt ->
+                    val username = alt.username ?: ""
+                    val password = alt.password ?: ""
+                    if (toSauth) {
+                        // Deduct extra 1 coin for sauth conversion (short transaction, no HTTP)
+                        altService.deductCoinForSauth(userApi.userId)
+                        try {
+                            val sauthResult = sauthService.doLogin(username, password)
+                            val sauthJson = sauthResult["sauthJson"] as? String
+                            if (sauthResult["success"] as? Boolean == true) {
+                                result += "$username----$password----${sauthJson ?: ""}"
+                            } else {
+                                // Sauth returned failure, refund the extra coin
+                                altService.refundCoinForSauth(userApi.userId)
+                                result += "$username----$password----error"
+                            }
+                        } catch (_: Exception) {
+                            // HTTP call failed, refund the extra coin
+                            altService.refundCoinForSauth(userApi.userId)
+                            result += "$username----$password----error"
+                        }
+                    } else {
+                        result += "$username----$password"
+                    }
                 }
-                userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, "Fetched $count alts via paid API")
+                val logMsg = if (toSauth) "Fetched $count alts with sauth via paid API" else "Fetched $count alts via paid API"
+                userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg)
                 return ResponseBase(result)
             } catch (e: RuntimeException) {
                 return ResponseBase(400, e.message ?: "Error occurred")
@@ -125,5 +149,40 @@ class AltController(
 
     fun meetAnonymousRequirement(ip: String): Boolean {
         return geolocationService.getGeolocation(ip).countryName == "China"
+    }
+
+    @GetMapping("/api/alt/convert/sauth")
+    fun convertSauth(@CurrentUserId userId: Int?, @RequestParam(required = false) userApiKey: String?,
+                     username: String, password: String): ResponseBase<String> {
+        // Resolve userId from session or API key
+        val resolvedUserId: Int
+        if (!userApiKey.isNullOrBlank()) {
+            try {
+                resolvedUserId = userApiService.getByApiKey(userApiKey).userId
+            } catch (_: Exception) {
+                return ResponseBase(400, "无效的 API Key")
+            }
+        } else if (userId != null) {
+            resolvedUserId = userId
+        } else {
+            return ResponseBase(401, "请先登录或提供 API Key")
+        }
+
+        return try {
+            val result = altService.convertAltToSauth(resolvedUserId, username, password)
+            val success = result["success"] as? Boolean ?: false
+            val message = result["message"] as? String ?: "未知错误"
+            val sauthJson = result["sauthJson"] as? String
+            userOperationService.log(resolvedUserId, EnumUserOperation.API_FETCH, "Sauth convert: $message")
+            if (success) {
+                ResponseBase(sauthJson ?: message)
+            } else {
+                ResponseBase(400, message)
+            }
+        } catch (e: RuntimeException) {
+            ResponseBase(400, e.message ?: "操作失败")
+        } catch (_: Exception) {
+            ResponseBase(500, "服务器内部错误")
+        }
     }
 }

@@ -6,6 +6,7 @@ import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.service.coin.CoinTransactionHistoryService
 import ltd.guimc.web.altget.service.coin.UserCoinService
+import ltd.guimc.web.altget.service.sauth.SauthService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -13,7 +14,8 @@ import org.springframework.transaction.annotation.Transactional
 class PayForAltService(
     private val userCoinService: UserCoinService,
     private val altService: AltService,
-    private val coinTransactionHistoryService: CoinTransactionHistoryService
+    private val coinTransactionHistoryService: CoinTransactionHistoryService,
+    private val sauthService: SauthService
 ) {
     @Transactional(rollbackFor = [Exception::class])
     fun payForAltAs(count: Int = 1, userId: Int): List<AltCategory> {

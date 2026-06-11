@@ -15,4 +15,5 @@ data class SiteProperities(
     val discordBotToken: String = "",
     val discordChannelId: String = "",
     val discordChannelSponsorRoleId: String = "",
+    val sauthServiceBaseUrl: String = "",
 )
