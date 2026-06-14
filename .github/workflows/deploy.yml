@@ -36,7 +36,9 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Build JAR
-        run: ./gradlew bootJar
+        run: |
+          chmod +x gradlew
+          ./gradlew bootJar
 
       - name: Rename JAR to fixed name
         run: |
@@ -52,7 +54,7 @@ jobs:
   deploy:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.event.head_commit.verified)
+      (github.event_name == 'push' && github.event.head_commit.verified == true)
     needs: build
     runs-on: ubuntu-latest
     steps:
