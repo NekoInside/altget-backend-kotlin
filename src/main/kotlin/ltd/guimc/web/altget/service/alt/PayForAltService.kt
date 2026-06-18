@@ -26,7 +26,7 @@ class PayForAltService(
         if (userCoin.balance < count) {
             throw RuntimeException("余额不足")
         }
-        val popupData = altService.fetchAlt(count)
+        val popupData = altService.fetchAlt(count, skipRecord = true)
         val correctCount = popupData.size
         if (correctCount > 0) {
             userCoin.balance -= correctCount

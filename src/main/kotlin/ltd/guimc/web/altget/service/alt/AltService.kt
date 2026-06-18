@@ -35,10 +35,10 @@ class AltService(
     private val log = LoggerFactory.getLogger(AltService::class.java)
 
     @Transactional(rollbackFor = [Exception::class])
-    fun fetchAlt(count: Int = 1, channel: String = "default"): List<AltCategory> {
+    fun fetchAlt(count: Int = 1, channel: String = "default", skipRecord: Boolean = false): List<AltCategory> {
         val popupData = baseMapper.popupByChannel(channel, count)
         removeBatchByIds(popupData.map { it.id })
-        if (popupData.isNotEmpty()) {
+        if (popupData.isNotEmpty() && !skipRecord) {
             altConsumptionRecordService.recordConsumption(channel, popupData.size)
         }
         return popupData
