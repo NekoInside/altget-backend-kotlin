@@ -41,6 +41,7 @@ class AltController(
         val userApiKey = authorizationHeader.removePrefix("Ciallo ").trim()
         if (!paid && count != 1) return ResponseBase(400, "Not allowed")
         if (count <= 0) return ResponseBase(400, "Invalid count wanted")
+        if (count > 1000) return ResponseBase(400, "Count too large")
         val userApi = try {
             userApiService.getByApiKey(userApiKey)
         } catch (_: Exception) {
