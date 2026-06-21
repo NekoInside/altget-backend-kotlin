@@ -1,5 +1,6 @@
 package ltd.guimc.web.altget.controller
 
+import jakarta.servlet.http.HttpServletRequest
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.component.DiscordApiService
@@ -34,8 +35,10 @@ class AltController(
     private val geolocationService: GeolocationService,
     private val sauthService: ltd.guimc.web.altget.service.sauth.SauthService
 ) {
-    @GetMapping("/api/alt", params = ["userApiKey"])
-    fun apiFetch(userApiKey: String, paid: Boolean = false, count: Int = 1, @RealIP ip: String): ResponseBase<List<String>> {
+    @GetMapping("/api/alt", headers = ["Authorization"])
+    fun apiFetch(paid: Boolean = false, count: Int = 1, @RealIP ip: String, requests: HttpServletRequest): ResponseBase<List<String>> {
+        val authorizationHeader = requests.getHeader("Authorization") ?: return ResponseBase(400, "Missing api key")
+        val userApiKey = authorizationHeader.removePrefix("Ciallo ").trim()
         if (!paid && count != 1) return ResponseBase(400, "Not allowed")
         if (count <= 0) return ResponseBase(400, "Invalid count wanted")
         val userApi = try {
@@ -80,7 +83,7 @@ class AltController(
         return ResponseBase(mutableListOf("${data[0].username}----${data[0].password}"))
     }
 
-    @GetMapping("/api/alt", params = ["!userApiKey"])
+    @GetMapping("/api/alt", headers = ["!Authorization"])
     fun webFetch(captchaId: String, captchaOutput: String, genTime: String, lotNumber: String, passToken: String, // captcha
                  taskId: String, nonce: String, // PoW
                  channel: String = "default",
@@ -133,7 +136,9 @@ class AltController(
     }
 
     @GetMapping("/api/alt/convert/gen")
-    fun generateSauth(userApiKey: String, @RealIP ip: String): ResponseBase<SauthGenerateResponse> {
+    fun generateSauth(@RealIP ip: String, requests: HttpServletRequest): ResponseBase<SauthGenerateResponse> {
+        val authorizationHeader = requests.getHeader("Authorization") ?: return ResponseBase(400, "Missing api key")
+        val userApiKey = authorizationHeader.removePrefix("Ciallo ").trim()
         val userApi = try {
             userApiService.getByApiKey(userApiKey)
         } catch (_: Exception) {
@@ -157,21 +162,18 @@ class AltController(
     }
 
     @GetMapping("/api/alt/convert/sauth")
-    fun convertSauth(@CurrentUserId userId: Int?, @RequestParam(required = false) userApiKey: String?,
-                     username: String, password: String, @RealIP ip: String): ResponseBase<String> {
+    fun convertSauth(@CurrentUserId userId: Int?,
+                     username: String, password: String, @RealIP ip: String, requests: HttpServletRequest): ResponseBase<String> {
         // Resolve userId from session or API key
-        val resolvedUserId: Int
-        if (!userApiKey.isNullOrBlank()) {
+        val authorizationHeader: String? = requests.getHeader("Authorization")
+        val userApiKey = authorizationHeader?.removePrefix("Ciallo ")?.trim()
+        val resolvedUserId: Int = if (!userApiKey.isNullOrBlank()) {
             try {
-                resolvedUserId = userApiService.getByApiKey(userApiKey).userId
+                userApiService.getByApiKey(userApiKey).userId
             } catch (_: Exception) {
                 return ResponseBase(400, "无效的 API Key")
             }
-        } else if (userId != null) {
-            resolvedUserId = userId
-        } else {
-            return ResponseBase(401, "请先登录或提供 API Key")
-        }
+        } else userId ?: return ResponseBase(401, "请先登录或提供 API Key")
 
         return try {
             val result = altService.convertAltToSauth(resolvedUserId, username, password)
