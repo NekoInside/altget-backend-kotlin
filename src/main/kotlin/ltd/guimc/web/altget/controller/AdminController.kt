@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.entity.db.alt.AltConsumptionRecord
+import ltd.guimc.web.altget.entity.db.alt.UsedAltCategory
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.entity.db.user.CoreAuth
@@ -11,6 +12,7 @@ import ltd.guimc.web.altget.entity.db.user.UserOperation
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.PageResponse
 import ltd.guimc.web.altget.entity.response.alt.AltConsumptionResponse
+import ltd.guimc.web.altget.entity.response.alt.UsedAltResponse
 import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
 import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
 import ltd.guimc.web.altget.entity.response.user.SimpleUserInfo
@@ -20,6 +22,7 @@ import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
 import ltd.guimc.web.altget.service.alt.AltConsumptionRecordService
+import ltd.guimc.web.altget.service.alt.UsedAltCategoryService
 import ltd.guimc.web.altget.service.coin.CoinTokenService
 import ltd.guimc.web.altget.service.coin.CoinTransactionHistoryService
 import ltd.guimc.web.altget.service.coin.UserCoinService
@@ -48,7 +51,8 @@ class AdminController(
     private val coinTokenService: CoinTokenService,
     private val coinTransactionHistoryService: CoinTransactionHistoryService,
     private val userOperationService: UserOperationService,
-    private val altConsumptionRecordService: AltConsumptionRecordService
+    private val altConsumptionRecordService: AltConsumptionRecordService,
+    private val usedAltCategoryService: UsedAltCategoryService
 ) {
     // <editor-fold desc="Helper">
     /**
@@ -333,6 +337,57 @@ class AdminController(
         }
         return ResponseBase(PageResponse(
             records = logs,
+            total = pageResult.total,
+            size = pageResult.size,
+            current = pageResult.current,
+            pages = pageResult.pages
+        ))
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="List Used Alts">
+    /**
+     * Query consumed (used) alts with optional filters.
+     *
+     * @param filterIp       Optional filter by the requesting IP
+     * @param filterUserId   Optional filter by the user who fetched the alt
+     * @param filterChannel  Optional filter by the original alt pool channel
+     * @param filterUsername Optional substring/equals filter by alt username
+     */
+    @GetMapping("/api/admin/used-alts")
+    fun listUsedAlts(
+        @CurrentUserId userId: Int?,
+        @RequestParam(defaultValue = "1") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(required = false) filterIp: String?,
+        @RequestParam(required = false) filterUserId: Int?,
+        @RequestParam(required = false) filterChannel: String?,
+        @RequestParam(required = false) filterUsername: String?
+    ): ResponseBase<PageResponse<UsedAltResponse>> {
+        requireAdmin<PageResponse<UsedAltResponse>>(userId)?.let { return it }
+        val normalizedUsername = filterUsername?.trim()
+        val queryWrapper = QueryWrapper<UsedAltCategory>()
+            .apply { filterIp?.let { eq("operation_ip", it) } }
+            .apply { filterUserId?.let { eq("user_id", it) } }
+            .apply { filterChannel?.let { eq("channel", it) } }
+            .apply { if (!normalizedUsername.isNullOrEmpty()) like("username", normalizedUsername) }
+            .orderByDesc("fetch_time")
+        val pageResult = usedAltCategoryService.getPage(page, size, queryWrapper)
+        val records = pageResult.records.map { alt ->
+            UsedAltResponse(
+                id = alt.id,
+                username = alt.username,
+                password = alt.password,
+                channel = alt.channel,
+                userId = alt.userId,
+                operationIp = alt.operationIp,
+                fetchMethod = alt.fetchMethod,
+                fetchTime = alt.fetchTime.toString(),
+                createdAt = alt.createdAt?.toString()
+            )
+        }
+        return ResponseBase(PageResponse(
+            records = records,
             total = pageResult.total,
             size = pageResult.size,
             current = pageResult.current,
