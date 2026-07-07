@@ -47,6 +47,7 @@ class AltController(
         } catch (_: Exception) {
             return ResponseBase(400, "Invalid api key")
         }
+        val userDetail = userDetailsService.getById(userApi.userId)
         if (paid) {
             try {
                 val data = payForAltService.payForAltAs(count, userApi.userId)
@@ -58,12 +59,17 @@ class AltController(
                 }
                 val logMsg = "Fetched $count alts via paid API"
                 userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg, ip = ip)
+                userDetailsService.updateById(userDetail.apply {
+                    totalPaidApiFetched += count
+                    dailyPaidApiFetched += count
+                    dailyAltFetched += count
+                    totalAltFetched += count
+                })
                 return ResponseBase(result)
             } catch (e: RuntimeException) {
                 return ResponseBase(400, e.message ?: "Error occurred")
             }
         }
-        val userDetail = userDetailsService.getById(userApi.userId)
         if (userDetail.dailyUserApiFetched >= userApi.limitLevel.limitDau &&
             userApi.limitLevel != EnumApiLimitLevel.LEVEL_UNLIMITED) return ResponseBase(400, "Daily limit reached")
         val data = altService.fetchAlt(count, "default")
