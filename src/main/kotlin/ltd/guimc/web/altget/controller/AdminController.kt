@@ -423,11 +423,13 @@ class AdminController(
             else -> return ResponseBase(400, "Invalid unit: $unit (expected one of: 1s, 1min, 1hour, 1day)")
         }
 
-        // Times are stored as LocalDateTime in UTC (JDBC serverTimezone=UTC).
-        val now = Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime()
-        val start = startTime?.let { parseUtcLocal(it) }
+        // Times are stored as LocalDateTime in the server timezone (UTC+8),
+        // since LocalDateTime.now() uses the JVM default zone. Do all bucket
+        // math in that same zone so the grid lines up with the stored values.
+        val now = Instant.now().atZone(SERVER_ZONE).toLocalDateTime()
+        val start = startTime?.let { parseServerLocal(it) }
             ?: now.truncatedTo(chronoUnit).minus((DEFAULT_RANGE_BUCKETS - 1).toLong(), chronoUnit)
-        val end = endTime?.let { parseUtcLocal(it) } ?: now
+        val end = endTime?.let { parseServerLocal(it) } ?: now
 
         val queryWrapper = QueryWrapper<AltConsumptionRecord>()
             .apply { channel?.let { eq("channel", it) } }
@@ -458,7 +460,7 @@ class AdminController(
             total[bucketIndex] += event.count
         }
 
-        val timeLabels = buckets.map { it.toInstant(ZoneOffset.UTC).toString() }
+        val timeLabels = buckets.map { it.toInstant(SERVER_ZONE).toString() }
         val values = LinkedHashMap<String, List<Int>>().apply {
             sourceKeys.forEach { put(it, sums[it]!!.toList()) }
             put("total", total.toList())
@@ -466,12 +468,15 @@ class AdminController(
         return ResponseBase(AltConsumptionResponse(time = timeLabels, values = values))
     }
 
-    private fun parseUtcLocal(iso: String): LocalDateTime =
-        OffsetDateTime.parse(iso).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()
+    private fun parseServerLocal(iso: String): LocalDateTime =
+        OffsetDateTime.parse(iso).withOffsetSameInstant(SERVER_ZONE).toLocalDateTime()
 
     private companion object {
         /** Number of buckets returned when no explicit time range is given. */
         private const val DEFAULT_RANGE_BUCKETS = 24
+
+        /** Server timezone: stored LocalDateTime values are UTC+8 wall-clock. */
+        private val SERVER_ZONE: ZoneOffset = ZoneOffset.ofHours(8)
     }
     // </editor-fold>
 }
