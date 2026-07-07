@@ -33,6 +33,11 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @RestController
 class AdminController(
@@ -338,36 +343,80 @@ class AdminController(
 
     // <editor-fold desc="Alt Consumption Statistics">
     /**
-     * Query alt consumption records for frontend chart rendering.
-     * Minimum time granularity is one hour.
+     * Query alt fetch events for frontend chart rendering, bucketed by time.
      *
-     * @param channel  Optional filter by source channel
-     * @param startTime Optional start of time range (ISO-8601, e.g. "2026-06-01T00:00:00")
-     * @param endTime   Optional end of time range (ISO-8601, e.g. "2026-06-02T00:00:00")
-     * @return List of hourly consumption records
+     * @param unit      Time bucket granularity: "1s", "1min", "1hour", or "1day" (default "1hour")
+     * @param channel   Optional filter by alt pool channel (e.g. "default", "pre-processed")
+     * @param startTime Optional start of time range (ISO-8601, e.g. "2026-07-07T00:00:00Z")
+     * @param endTime   Optional end of time range (ISO-8601)
+     * @return Bucketed consumption series per fetch source plus a "total" series
      */
     @GetMapping("/api/admin/alt-consumption")
     fun getAltConsumption(
         @CurrentUserId userId: Int?,
+        @RequestParam(defaultValue = "1hour") unit: String,
         @RequestParam(required = false) channel: String?,
         @RequestParam(required = false) startTime: String?,
         @RequestParam(required = false) endTime: String?
-    ): ResponseBase<List<AltConsumptionResponse>> {
-        requireAdmin<List<AltConsumptionResponse>>(userId)?.let { return it }
+    ): ResponseBase<AltConsumptionResponse> {
+        requireAdmin<AltConsumptionResponse>(userId)?.let { return it }
+        val chronoUnit = when (unit) {
+            "1s" -> ChronoUnit.SECONDS
+            "1min" -> ChronoUnit.MINUTES
+            "1hour" -> ChronoUnit.HOURS
+            "1day" -> ChronoUnit.DAYS
+            else -> return ResponseBase(400, "Invalid unit: $unit (expected one of: 1s, 1min, 1hour, 1day)")
+        }
+
+        // Times are stored as LocalDateTime in UTC (JDBC serverTimezone=UTC).
+        val now = Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime()
+        val start = startTime?.let { parseUtcLocal(it) }
+            ?: now.truncatedTo(chronoUnit).minus((DEFAULT_RANGE_BUCKETS - 1).toLong(), chronoUnit)
+        val end = endTime?.let { parseUtcLocal(it) } ?: now
+
         val queryWrapper = QueryWrapper<AltConsumptionRecord>()
             .apply { channel?.let { eq("channel", it) } }
-            .apply { startTime?.let { ge("hour_slot", it) } }
-            .apply { endTime?.let { le("hour_slot", it) } }
-            .orderByAsc("hour_slot")
-        val records = altConsumptionRecordService.list(queryWrapper)
-        val response = records.map { record ->
-            AltConsumptionResponse(
-                channel = record.channel,
-                hourSlot = record.hourSlot.toString(),
-                consumedCount = record.consumedCount
-            )
+            .ge("event_time", start)
+            .le("event_time", end)
+        val events = altConsumptionRecordService.list(queryWrapper)
+
+        // Build the ordered list of bucket starts in [start, end].
+        val buckets = ArrayList<LocalDateTime>()
+        var cursor = start.truncatedTo(chronoUnit)
+        while (!cursor.isAfter(end)) {
+            buckets.add(cursor)
+            cursor = cursor.plus(1, chronoUnit)
         }
-        return ResponseBase(response)
+
+        // Sum counts into each bucket, per source.
+        val sourceKeys = listOf("webfetch", "freeapifetch", "paidapifetch")
+        val sums = HashMap<String, IntArray>(sourceKeys.size + 1)
+        sourceKeys.forEach { sums[it] = IntArray(buckets.size) }
+        val total = IntArray(buckets.size)
+        val firstBucket = buckets.firstOrNull()
+        for (event in events) {
+            if (firstBucket == null) continue
+            val bucketIndex = chronoUnit.between(firstBucket, event.time.truncatedTo(chronoUnit)).toInt()
+            if (bucketIndex < 0 || bucketIndex >= buckets.size) continue
+            val series = sums[event.source]
+            if (series != null) series[bucketIndex] += event.count
+            total[bucketIndex] += event.count
+        }
+
+        val timeLabels = buckets.map { it.toInstant(ZoneOffset.UTC).toString() }
+        val values = LinkedHashMap<String, List<Int>>().apply {
+            sourceKeys.forEach { put(it, sums[it]!!.toList()) }
+            put("total", total.toList())
+        }
+        return ResponseBase(AltConsumptionResponse(time = timeLabels, values = values))
+    }
+
+    private fun parseUtcLocal(iso: String): LocalDateTime =
+        OffsetDateTime.parse(iso).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()
+
+    private companion object {
+        /** Number of buckets returned when no explicit time range is given. */
+        private const val DEFAULT_RANGE_BUCKETS = 24
     }
     // </editor-fold>
 }

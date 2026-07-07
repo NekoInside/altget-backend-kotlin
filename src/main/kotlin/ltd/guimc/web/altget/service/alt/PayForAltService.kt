@@ -14,11 +14,12 @@ import org.springframework.transaction.annotation.Transactional
 class PayForAltService(
     private val userCoinService: UserCoinService,
     private val altService: AltService,
+    private val altConsumptionRecordService: AltConsumptionRecordService,
     private val coinTransactionHistoryService: CoinTransactionHistoryService,
     private val sauthService: SauthService
 ) {
     @Transactional(rollbackFor = [Exception::class])
-    fun payForAltAs(count: Int = 1, userId: Int): List<AltCategory> {
+    fun payForAltAs(count: Int = 1, userId: Int, ip: String? = null): List<AltCategory> {
         val userCoinWrapper = QueryWrapper<UserCoin>()
             .eq("user_id", userId)
             .last("FOR UPDATE")
@@ -26,12 +27,13 @@ class PayForAltService(
         if (userCoin.balance < count) {
             throw RuntimeException("余额不足")
         }
-        val popupData = altService.fetchAlt(count, skipRecord = true)
+        val popupData = altService.fetchAlt(count, "default", fetchMethod = "paidapi", userId = userId, ip = ip)
         val correctCount = popupData.size
         if (correctCount > 0) {
             userCoin.balance -= correctCount
             userCoinService.updateById(userCoin)
             coinTransactionHistoryService.logTransaction(userId = userId, amount = -correctCount, type = EnumTransactionType.PAID_USER_API_FETCH)
+            altConsumptionRecordService.recordFetch("paidapifetch", "default", userId, correctCount)
         }
         return popupData
     }

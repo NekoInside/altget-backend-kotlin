@@ -3,6 +3,7 @@ package ltd.guimc.web.altget.service.alt
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import ltd.guimc.web.altget.entity.db.alt.AltCategory
+import ltd.guimc.web.altget.entity.db.alt.UsedAltCategory
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.mapper.db.alt.AltCategoryMapper
@@ -14,10 +15,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 
 @Service
 class AltService(
-    private val altConsumptionRecordService: AltConsumptionRecordService,
+    private val usedAltCategoryService: UsedAltCategoryService,
     private val userCoinService: UserCoinService,
     private val coinTransactionHistoryService: CoinTransactionHistoryService,
     private val sauthService: SauthService
@@ -34,12 +36,39 @@ class AltService(
 
     private val log = LoggerFactory.getLogger(AltService::class.java)
 
+    /**
+     * Pop [count] alts from the [channel] pool and archive each consumed alt
+     * into [used_alt_category] (instead of deleting it).
+     *
+     * @param fetchMethod How this fetch originated: "web", "freeapi", or "paidapi"
+     * @param userId      The user who triggered the fetch, or null for anonymous fetches
+     * @param ip          IP address the fetch request originated from
+     */
     @Transactional(rollbackFor = [Exception::class])
-    fun fetchAlt(count: Int = 1, channel: String = "default", skipRecord: Boolean = false): List<AltCategory> {
+    fun fetchAlt(
+        count: Int = 1,
+        channel: String = "default",
+        fetchMethod: String = "web",
+        userId: Int? = null,
+        ip: String? = null
+    ): List<AltCategory> {
         val popupData = baseMapper.popupByChannel(channel, count)
         removeBatchByIds(popupData.map { it.id })
-        if (popupData.isNotEmpty() && !skipRecord) {
-            altConsumptionRecordService.recordConsumption(channel, popupData.size)
+        if (popupData.isNotEmpty()) {
+            val now = LocalDateTime.now()
+            val archived = popupData.map { alt ->
+                UsedAltCategory().apply {
+                    this.username = alt.username
+                    this.password = alt.password
+                    this.channel = alt.channel
+                    this.userId = userId
+                    this.operationIp = ip
+                    this.fetchMethod = fetchMethod
+                    this.fetchTime = now
+                    this.createdAt = alt.createdAt
+                }
+            }
+            usedAltCategoryService.saveBatch(archived)
         }
         return popupData
     }

@@ -27,6 +27,7 @@ class AltController(
     private val geetestVerifyComponent: GeetestVerifyComponent,
     private val poWTaskService: PoWTaskService,
     private val altService: AltService,
+    private val altConsumptionRecordService: ltd.guimc.web.altget.service.alt.AltConsumptionRecordService,
     private val userDetailsService: UserDetailsService,
     private val discordApiService: DiscordApiService,
     private val userApiService: UserApiService,
@@ -50,7 +51,7 @@ class AltController(
         val userDetail = userDetailsService.getById(userApi.userId)
         if (paid) {
             try {
-                val data = payForAltService.payForAltAs(count, userApi.userId)
+                val data = payForAltService.payForAltAs(count, userApi.userId, ip)
                 val result = mutableListOf<String>()
                 data.forEach { alt ->
                     val username = alt.username ?: ""
@@ -72,8 +73,9 @@ class AltController(
         }
         if (userDetail.dailyUserApiFetched >= userApi.limitLevel.limitDau &&
             userApi.limitLevel != EnumApiLimitLevel.LEVEL_UNLIMITED) return ResponseBase(400, "Daily limit reached")
-        val data = altService.fetchAlt(count, "default")
+        val data = altService.fetchAlt(count, "default", fetchMethod = "freeapi", userId = userApi.userId, ip = ip)
         if (data.isEmpty()) return ResponseBase(400, "No alt available")
+        altConsumptionRecordService.recordFetch("freeapifetch", "default", userApi.userId, data.size)
         if (userDetail.dailyUserApiFetched++ >= userApi.limitLevel.limitDau &&
             userApi.limitLevel != EnumApiLimitLevel.LEVEL_UNLIMITED) {
             userApiService.updateById(userApi.apply {
@@ -108,11 +110,12 @@ class AltController(
         if (userId == null && !meetAnonymousRequirement(ip)) {
             return ResponseBase(403, "Login required for your region")
         }
-        val data = altService.fetchAlt(1, channel)
+        val data = altService.fetchAlt(1, channel, fetchMethod = "web", userId = userId, ip = ip)
         if (data.isEmpty()) {
             return ResponseBase(500, "No alt available")
         }
         val alt = data[0]
+        altConsumptionRecordService.recordFetch("webfetch", channel, userId, data.size)
         if (userId != null) {
             userOperationService.log(userId, EnumUserOperation.WEB_FETCH, "Fetched alt ${alt.username}----${alt.password} via web channel '$channel'", ip = ip)
             userDetailsService.updateById(userDetailsService.getById(userId)?.apply {
@@ -153,7 +156,7 @@ class AltController(
         }
         altService.deductCoinForSauth(userApi.userId)
         try {
-            val data = payForAltService.payForAltAs(1, userApi.userId)
+            val data = payForAltService.payForAltAs(1, userApi.userId, ip)
             if (data.isEmpty()) throw RuntimeException("No alt available")
             val logMsg = "Fetched 1 alt with sauth via paid API"
             userOperationService.log(userApi.userId, EnumUserOperation.PAID_API_FETCH, logMsg, ip = ip)
