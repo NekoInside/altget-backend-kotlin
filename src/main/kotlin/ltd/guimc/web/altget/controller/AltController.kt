@@ -9,6 +9,7 @@ import ltd.guimc.web.altget.entity.request.CaptchaRequest
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.sauth.SauthGenerateResponse
 import ltd.guimc.web.altget.enum.EnumApiLimitLevel
+import ltd.guimc.web.altget.enum.EnumUserRole
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.service.alt.AltService
 import ltd.guimc.web.altget.service.alt.PayForAltService
@@ -49,6 +50,7 @@ class AltController(
             return ResponseBase(400, "Invalid api key")
         }
         val userDetail = userDetailsService.getById(userApi.userId)
+        if (userDetail.userRole == EnumUserRole.BANNED) return ResponseBase(400, "User banned")
         if (paid) {
             try {
                 val data = payForAltService.payForAltAs(count, userApi.userId, ip)
