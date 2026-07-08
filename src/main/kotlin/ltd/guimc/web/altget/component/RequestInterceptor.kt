@@ -7,6 +7,7 @@ import ltd.guimc.web.altget.service.user.UserDetailsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
+import java.net.InetAddress
 
 @Component
 class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent,
@@ -23,10 +24,57 @@ class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent,
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         resolveUserId(request)
 
-        val realIp = request.getHeader("X-Real-IP")?.takeIf { it.isNotBlank() } ?: request.remoteAddr
+        val realIp = resolveRealIp(request)
         request.setAttribute(REAL_IP_ATTRIBUTE, realIp)
 
         return true
+    }
+
+    private fun resolveRealIp(request: HttpServletRequest): String {
+        val sourceIp = request.remoteAddr
+        val sourceAddress = sourceIp.toInetAddressOrNull()
+        val forwardedIp = request.getHeader("X-Real-IP")
+            ?.substringBefore(',')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        if (sourceAddress == null || !sourceAddress.isReservedSourceAddress()) {
+            return sourceIp
+        }
+
+        return forwardedIp ?: sourceIp
+    }
+
+    private fun String.toInetAddressOrNull(): InetAddress? = try {
+        InetAddress.getByName(this)
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun InetAddress.isReservedSourceAddress(): Boolean {
+        if (isAnyLocalAddress || isLoopbackAddress || isSiteLocalAddress || isLinkLocalAddress || isMulticastAddress) {
+            return true
+        }
+
+        val addressBytes = address
+        if (addressBytes.size == 4) {
+            val firstOctet = addressBytes[0].toInt() and 0xFF
+            val secondOctet = addressBytes[1].toInt() and 0xFF
+            return firstOctet == 0 ||
+                firstOctet == 10 ||
+                (firstOctet == 100 && secondOctet in 64..127) ||
+                (firstOctet == 169 && secondOctet == 254) ||
+                (firstOctet == 172 && secondOctet in 16..31) ||
+                (firstOctet == 192 && secondOctet == 0) ||
+                (firstOctet == 192 && secondOctet == 168) ||
+                (firstOctet == 198 && secondOctet in 18..19) ||
+                firstOctet >= 224
+        }
+
+        return hostAddress.startsWith("fc", ignoreCase = true) ||
+            hostAddress.startsWith("fd", ignoreCase = true) ||
+            hostAddress == "::" ||
+            hostAddress == "::1"
     }
 
     fun resolveUserId(request: HttpServletRequest) {

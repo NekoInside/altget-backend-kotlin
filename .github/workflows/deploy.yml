@@ -40,6 +40,11 @@ jobs:
           chmod +x gradlew
           ./gradlew bootJar
 
+      - name: Run tests
+        run: |
+          chmod +x gradlew
+          ./gradlew test
+
       - name: Rename JAR to fixed name
         run: |
           cp build/libs/*.jar build/libs/app.jar

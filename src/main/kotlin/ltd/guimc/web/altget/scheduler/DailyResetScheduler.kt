@@ -1,6 +1,8 @@
 package ltd.guimc.web.altget.scheduler
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper
+import ltd.guimc.web.altget.entity.db.user.UserApi
 import ltd.guimc.web.altget.entity.db.user.UserDetails
 import ltd.guimc.web.altget.service.user.UserApiService
 import ltd.guimc.web.altget.service.user.UserDetailsService
@@ -21,22 +23,24 @@ class DailyResetScheduler(
     fun dailyReset() {
         logger.info("Daily reset scheduler triggered")
 
-        // Step 1: Check each user's dailyUserApiFetched against the lower limit level threshold,
-        // and downgrade limitLevel if usage is below the lower level's limit.
         val allUsers = userDetailsService.list()
+        val userIds = allUsers.mapNotNull { it.userId }.distinct()
+        val userApisByUserId = if (userIds.isEmpty()) {
+            emptyMap()
+        } else {
+            userApiService.list(QueryWrapper<UserApi>().`in`("user_id", userIds)).associateBy { it.userId }
+        }
         var downgradedCount = 0
 
         for (user in allUsers) {
-            val userApi = userApiService.getById(user.userId!!) ?: continue
+            val userId = user.userId ?: continue
+            val userApi = userApisByUserId[userId] ?: continue
             val currentLevel = userApi.limitLevel
             val lowerLevel = currentLevel.getLowerLimitLevel()
 
-            // -1 means no check (LEVEL_UNLIMITED)
             if (lowerLevel.limitDau == -1L) continue
-            // Already at the lowest possible level, no downgrade needed
             if (currentLevel == lowerLevel) continue
 
-            // If daily usage is below the lower level's threshold, downgrade
             if (user.dailyUserApiFetched < lowerLevel.limitDau) {
                 userApi.limitLevel = lowerLevel
                 userApiService.updateById(userApi)

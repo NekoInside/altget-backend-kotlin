@@ -23,15 +23,11 @@ import com.yubico.webauthn.exception.RegistrationFailedException
 import jakarta.servlet.http.HttpServletResponse
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.annotations.RealIP
-import ltd.guimc.web.altget.component.EmailComponent
 import ltd.guimc.web.altget.component.GeetestVerifyComponent
 import ltd.guimc.web.altget.component.JwtTokenComponent
 import ltd.guimc.web.altget.config.SiteProperities
-import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.entity.db.passkey.PasskeyCredentialEntity
-import ltd.guimc.web.altget.entity.db.user.CoreAuth
 import ltd.guimc.web.altget.entity.db.user.UserDetails
-import ltd.guimc.web.altget.entity.db.user.UserOauth
 import ltd.guimc.web.altget.entity.request.auth.ForgotPasswordRequest
 import ltd.guimc.web.altget.entity.request.auth.LoginVerifyRequest
 import ltd.guimc.web.altget.entity.request.auth.RegisterRequest
@@ -47,7 +43,7 @@ import ltd.guimc.web.altget.entity.response.passkey.PasskeyOptionsResponse
 import ltd.guimc.web.altget.enum.EnumOauthUsage
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
-import ltd.guimc.web.altget.service.coin.UserCoinService
+import ltd.guimc.web.altget.service.auth.AuthAccountService
 import ltd.guimc.web.altget.service.passkey.PasskeyCredentialService
 import ltd.guimc.web.altget.service.passkey.WebAuthnChallengeCacheService
 import ltd.guimc.web.altget.service.user.CoreAuthService
@@ -74,17 +70,16 @@ import java.net.http.HttpResponse
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.LocalDateTime
-import java.util.*
+import java.util.UUID
 
 @RestController
 class AuthController(
     private val geetestVerifyComponent: GeetestVerifyComponent,
-    private val emailComponent: EmailComponent,
     private val jwtTokenComponent: JwtTokenComponent,
     private val siteProperities: SiteProperities,
+    private val authAccountService: AuthAccountService,
     private val coreAuthService: CoreAuthService,
     private val userOauthService: UserOauthService,
-    private val userCoinService: UserCoinService,
     @Qualifier("objectRedisTemplate")
     private val objectRedisTemplate: RedisTemplate<String, Any>,
     private val userDetailsService: UserDetailsService,
@@ -107,49 +102,12 @@ class AuthController(
         if (!isValidUsername(request.username)) {
             return ResponseBase(400, "用户名格式不正确")
         }
-        if (coreAuthService.getByUsername(request.username) != null ||
-            coreAuthService.getByEmail(request.email) != null) {
-            Thread.sleep(3000)
-            return ResponseBase("若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
-        }
-        // 初始化数据库值
-        coreAuthService.save(CoreAuth().apply {
-            email = request.email
-            username = request.username
-            srpSalt = request.salt
-            srpVerifier = request.verifier
-        })
-        // 重新获取 CoreAuth 示例以获取 ID
-        val savedCoreAuth =
-            coreAuthService.getByUsername(request.username) ?: return ResponseBase(500, "用户注册失败，请稍后再试")
-        // 理论上来说不应该失败 除非数据库掉了
-        userOauthService.save(UserOauth().apply {
-            userId = savedCoreAuth.userId
-        })
-        userCoinService.save(UserCoin().apply {
-            userId = savedCoreAuth.userId
-            balance = 0
-        })
-        userDetailsService.save(UserDetails().apply {
-            userId = savedCoreAuth.userId
-        })
-        // 前面的步骤都成功了 说明用户注册成功了 现在需要发送验证邮件
-        val token = jwtTokenComponent.generateRegisterVerifyToken(request.email)
-        val fullActiveUrl = "https://" + siteProperities.domain + "/activate?token=" + URLEncoder.encode(token, "UTF-8")
-        emailComponent.sendActivationEmail(request.email, request.username, fullActiveUrl)
-        return ResponseBase("若该用户名或邮箱未被注册，我们将发送一封验证邮件到该邮箱，请注意查收")
+        return authAccountService.register(request)
     }
 
     @GetMapping("/api/auth/activate")
     fun activate(code: String): ResponseBase<String> {
-        val email = jwtTokenComponent.getEmailFromToken(code) ?: return ResponseBase(400, "无效的激活链接")
-        val coreAuthEntity = coreAuthService.getByEmail(email) ?: return ResponseBase(400, "无效的激活链接")
-        val userDetails: UserDetails = userDetailsService.getById(coreAuthEntity.userId) ?: return ResponseBase(400, "无效的激活链接")
-        if (userDetails.userRole != EnumUserRole.UNVERIFY) return ResponseBase(400, "无效的激活链接")
-        userDetailsService.updateById(userDetails.apply {
-            userRole = EnumUserRole.VERIFY
-        })
-        return ResponseBase("账户激活成功，您现在可以使用账号密码登录了")
+        return authAccountService.activate(code)
     }
     // </editor-fold>
 
@@ -159,49 +117,13 @@ class AuthController(
         if (!geetestVerifyComponent.verify(request)) {
             return ResponseBase(400, "人机验证校验失败")
         }
-        val coreAuth = coreAuthService.getByEmail(request.email)
-        if (coreAuth != null) {
-            val token = jwtTokenComponent.generatePasswordResetToken(request.email)
-            // 将重置唯一标识存入 Redis，实现有状态防重放
-            val resetId = jwtTokenComponent.getPasswordResetIdFromToken(token)
-            if (resetId != null) {
-                objectRedisTemplate.opsForValue().set(
-                    "password-reset:$resetId",
-                    coreAuth.userId.toString(),
-                    jwtTokenComponent.jwtProperties.registerVerifyTokenExpiration
-                )
-            }
-            val resetUrl = "https://" + siteProperities.domain + "/reset-password?token=" + URLEncoder.encode(token, "UTF-8")
-            emailComponent.sendPasswordResetEmail(request.email, coreAuth.username ?: "", resetUrl)
-        }
-        // Always return the same message to prevent email enumeration
-        Thread.sleep(3000)
-        return ResponseBase("若该邮箱已注册，我们将发送一封密码重置邮件到该邮箱，请注意查收")
+        return authAccountService.forgotPassword(request)
     }
 
     @PostMapping("/api/auth/reset-password")
     @Transactional
     fun resetPassword(@RequestBody request: ResetPasswordRequest, @RealIP ip: String): ResponseBase<String> {
-        // 提取并校验防重放标识：每个 token 只能使用一次
-        val resetId = jwtTokenComponent.getPasswordResetIdFromToken(request.token)
-            ?: return ResponseBase(400, "无效的重置链接")
-        val redisKey = "password-reset:$resetId"
-        val consumed = objectRedisTemplate.opsForValue().getAndDelete(redisKey)
-            ?: return ResponseBase(400, "重置链接已失效或已被使用")
-        // 验证 JWT 是否过期
-        if (!jwtTokenComponent.isJWTVaild(request.token)) {
-            return ResponseBase(400, "重置链接已过期")
-        }
-        val email = jwtTokenComponent.getEmailFromToken(request.token)
-            ?: return ResponseBase(400, "无效的重置链接")
-        val coreAuth = coreAuthService.getByEmail(email)
-            ?: return ResponseBase(400, "无效的重置链接")
-        coreAuthService.updateById(coreAuth.apply {
-            srpSalt = request.salt
-            srpVerifier = request.verifier
-        })
-        userOperationService.log(coreAuth.userId, EnumUserOperation.PASSWORD_RESET, "通过邮箱重置密码", ip = ip)
-        return ResponseBase("密码重置成功，您现在可以使用新密码登录了")
+        return authAccountService.resetPassword(request, ip)
     }
     // </editor-fold>
 
@@ -303,6 +225,7 @@ class AuthController(
             throw RuntimeException("生成假Salt失败", e)
         }
     }
+
     // </editor-fold>
 
     // <editor-fold desc="GitHub OAuth">

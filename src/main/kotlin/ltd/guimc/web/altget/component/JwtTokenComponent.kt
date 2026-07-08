@@ -69,11 +69,13 @@ class JwtTokenComponent(
     fun getPasswordResetIdFromToken(token: String): String? {
         try {
             if (!isJWTVaild(token)) {
+                log.debug("Rejected password reset token because JWT validation failed")
                 return null
             }
             val jwt = JWTUtil.parseToken(token)
             return jwt.getPayload(JWTPayload.JWT_ID) as? String
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            log.debug("Failed to parse password reset token", exception)
         }
         return null
     }
@@ -83,17 +85,16 @@ class JwtTokenComponent(
         try {
             JWTValidator.of(token)
                 .validateDate(DateUtil.date())
-                .validateAlgorithm(JWTSignerUtil.hs256(jwtProperties.secret.toByteArray()));
+                .validateAlgorithm(JWTSignerUtil.hs256(jwtProperties.secret.toByteArray()))
             return true
-        } catch (_: Exception) {
-            // token 无效或过期
+        } catch (exception: Exception) {
+            log.debug("JWT validation failed", exception)
         }
         return false
     }
 
     fun getUserIdFromToken(token: String): Int? {
         try {
-            log.error("0")
             if (!isJWTVaild(token)) {
                 return null
             }
@@ -103,11 +104,12 @@ class JwtTokenComponent(
             val jwtSessionId = jwtSessionIdList.firstOrNull() ?: return null
             val userSessionId = redisSessionComponent.getSession(userId.toInt()) ?: return null
             if (jwtSessionId != userSessionId) {
+                log.debug("Rejected JWT for user {} because session id does not match", userId)
                 return null
             }
             return userId.toInt()
-        } catch (_: Exception) {
-            // 解析 JWT 失败?
+        } catch (exception: Exception) {
+            log.debug("Failed to extract user id from JWT", exception)
         }
         return null
     }
@@ -120,8 +122,8 @@ class JwtTokenComponent(
             val jwt = JWTUtil.parseToken(token)
             val email = jwt.getPayload(JWTPayload.SUBJECT) as? String ?: return null
             return email
-        } catch (_: Exception) {
-            // 解析 JWT 失败?
+        } catch (exception: Exception) {
+            log.debug("Failed to extract email from JWT", exception)
         }
         return null
     }
