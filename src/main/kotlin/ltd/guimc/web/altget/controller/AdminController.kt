@@ -266,10 +266,18 @@ class AdminController(
     fun listTokens(
         @CurrentUserId userId: Int?,
         @RequestParam(defaultValue = "1") page: Int,
-        @RequestParam(defaultValue = "20") size: Int
+        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(defaultValue = "") keyword: String,
     ): ResponseBase<PageResponse<CoinTokenResponse>> {
         requireAdmin<PageResponse<CoinTokenResponse>>(userId)?.let { return it }
-        val pageResult = coinTokenService.getPage(page, size)
+        val queryWrapper = QueryWrapper<CoinToken>().apply {
+            if (keyword.isNotEmpty()) {
+                nested { wrapper ->
+                    wrapper.like("id", keyword)
+                }
+            }
+        }
+        val pageResult = coinTokenService.getPage(page, size, queryWrapper)
         val tokenList = pageResult.records.map { token ->
             CoinTokenResponse(
                 id = token.id,
