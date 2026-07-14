@@ -35,19 +35,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build JAR
+      - name: Build and Test
         run: |
           chmod +x gradlew
-          ./gradlew bootJar
-
-      - name: Run tests
-        run: |
-          chmod +x gradlew
-          ./gradlew test
-
-      - name: Rename JAR to fixed name
-        run: |
-          cp build/libs/*.jar build/libs/app.jar
+          ./gradlew bootJar test
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
@@ -57,12 +48,11 @@ jobs:
           retention-days: 3
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' || 
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Verify commit signature
         if: github.event_name == 'push'
         env:
@@ -82,7 +72,7 @@ jobs:
           path: .
 
       - name: Copy JAR to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -93,7 +83,7 @@ jobs:
           overwrite: true
 
       - name: Restart backend service
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}

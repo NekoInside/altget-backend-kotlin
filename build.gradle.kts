@@ -120,3 +120,11 @@ sourceSets {
         }
     }
 }
+
+tasks.named<Jar>("jar") {
+    enabled = false
+}
+
+tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootJar> {
+    archiveFileName.set("app.jar")
+}
