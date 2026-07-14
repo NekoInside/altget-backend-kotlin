@@ -156,7 +156,7 @@ class AltController(
         } catch (_: Exception) {
             return ResponseBase(400, "Invalid api key")
         }
-        altService.deductCoinForSauth(userApi.userId)
+        // altService.deductCoinForSauth(userApi.userId)
         try {
             val data = payForAltService.payForAltAs(1, userApi.userId, ip)
             if (data.isEmpty()) throw RuntimeException("No alt available")
@@ -168,7 +168,7 @@ class AltController(
             }
             return ResponseBase(SauthGenerateResponse(data[0].username!!, data[0].password!!, sauth["sauthJson"] as? String ?: ""))
         } catch (e: RuntimeException) {
-            altService.deductCoinForSauth(userApi.userId)
+            // altService.deductCoinForSauth(userApi.userId)
             return ResponseBase(400, e.message ?: "Error occurred")
         }
     }

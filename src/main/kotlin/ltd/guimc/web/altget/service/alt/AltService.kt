@@ -131,7 +131,7 @@ class AltService(
     fun convertAltToSauth(userId: Int, username: String, password: String): Map<String, Any?> {
         // 第一步：在短事务中扣除硬币（不包含 HTTP 调用）
         // Use self (AOP proxy) to ensure @Transactional is applied
-        self.deductCoinForSauth(userId)
+//        self.deductCoinForSauth(userId)
         // 第二步：在事务外调用 HTTP 请求，避免长时间占用数据库连接
         return try {
             val result = sauthService.doLogin(username, password)
@@ -139,13 +139,13 @@ class AltService(
             if (!success) {
                 // 登录失败，退还硬币
                 log.warn("Sauth login returned failure for user {}, refunding coin", userId)
-                self.refundCoinForSauth(userId)
+//                self.refundCoinForSauth(userId)
             }
             result
         } catch (e: Exception) {
             log.error("Sauth login failed after coin deduction for user {}", userId, e)
             // HTTP 调用失败，退还硬币
-            self.refundCoinForSauth(userId)
+//            self.refundCoinForSauth(userId)
             throw RuntimeException("4399 登录服务暂时不可用，请稍后再试")
         }
     }
