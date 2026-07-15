@@ -159,8 +159,10 @@ class EmailComponent(
             "from" to resendProperties.from.ifBlank { mailProperties.from },
             "to" to listOf(to),
             "subject" to subject,
-            "template_id" to resendTemplate.id,
-            "variables" to resendVariables
+            "template" to linkedMapOf<String, Any>(
+                "id" to resendTemplate.id,
+                "variables" to resendVariables
+            )
         )
 
         try {
