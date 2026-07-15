@@ -52,6 +52,27 @@ mail:
   domain: example.com
   default-expiration-minutes: 30
 
+resend:
+  # Leave api-key blank to disable Resend and use SMTP (above) for all emails.
+  # When set, each template below with a non-empty `id` is sent via Resend using
+  # the remote template instead of rendering the local Thymeleaf HTML.
+  api-key: ""
+  api-base-url: https://api.resend.com
+  from: ""            # blank -> falls back to mail.from
+  templates:
+    activation:
+      id: ""          # e.g. "tmpl_xxx"; blank keeps SMTP for this template
+      variables:      # internal field name -> Resend template variable name
+        username: USERNAME
+        activationUrl: ACTIVATION_URL
+        expirationMinutes: EXPIRATION_MINUTES
+    password-reset:
+      id: ""
+      variables:
+        username: USERNAME
+        resetUrl: RESET_URL
+        expirationMinutes: EXPIRATION_MINUTES
+
 jwt:
   secret: your-jwt-secret-key-here-at-least-256-bits
   issuer: altget
