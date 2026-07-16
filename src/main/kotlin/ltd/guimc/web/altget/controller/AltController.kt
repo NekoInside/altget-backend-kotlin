@@ -73,7 +73,7 @@ class AltController(
                 return ResponseBase(400, e.message ?: "Error occurred")
             }
         }
-        if (userDetail.dailyUserApiFetched >= userApi.limitLevel.limitDau &&
+        /*if (userDetail.dailyUserApiFetched >= userApi.limitLevel.limitDau &&
             userApi.limitLevel != EnumApiLimitLevel.LEVEL_UNLIMITED) return ResponseBase(400, "Daily limit reached")
         val data = altService.fetchAlt(count, "default", fetchMethod = "freeapi", userId = userApi.userId, ip = ip)
         if (data.isEmpty()) return ResponseBase(400, "No alt available")
@@ -91,7 +91,8 @@ class AltController(
             dailyAltFetched += 1
             totalAltFetched += 1
         })
-        return ResponseBase(mutableListOf("${data[0].username}----${data[0].password}"))
+        return ResponseBase(mutableListOf("${data[0].username}----${data[0].password}"))*/
+        return ResponseBase(400, "Free API supply suspended")
     }
 
     @GetMapping("/api/alt", headers = ["!Authorization"])

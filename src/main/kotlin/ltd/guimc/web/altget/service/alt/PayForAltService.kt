@@ -24,15 +24,15 @@ class PayForAltService(
             .eq("user_id", userId)
             .last("FOR UPDATE")
         val userCoin = userCoinService.getOne(userCoinWrapper) ?: throw RuntimeException("用户不存在")
-        if (userCoin.balance < count) {
+        if (userCoin.balance < (count * 4)) {
             throw RuntimeException("余额不足")
         }
         val popupData = altService.fetchAlt(count, "default", fetchMethod = "paidapi", userId = userId, ip = ip)
         val correctCount = popupData.size
         if (correctCount > 0) {
-            userCoin.balance -= correctCount
+            userCoin.balance -= (correctCount * 4)
             userCoinService.updateById(userCoin)
-            coinTransactionHistoryService.logTransaction(userId = userId, amount = -correctCount, type = EnumTransactionType.PAID_USER_API_FETCH)
+            coinTransactionHistoryService.logTransaction(userId = userId, amount = -(correctCount * 4), type = EnumTransactionType.PAID_USER_API_FETCH)
             altConsumptionRecordService.recordFetch("paidapifetch", "default", userId, correctCount)
         }
         return popupData
