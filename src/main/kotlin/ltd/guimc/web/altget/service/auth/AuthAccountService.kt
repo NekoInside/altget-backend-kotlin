@@ -61,7 +61,7 @@ class AuthAccountService(
         })
         userCoinService.save(UserCoin().apply {
             userId = savedCoreAuth.userId
-            balance = 0
+            balance = 0L
         })
         userDetailsService.save(UserDetails().apply {
             userId = savedCoreAuth.userId

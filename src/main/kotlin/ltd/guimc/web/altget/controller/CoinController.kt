@@ -17,6 +17,7 @@ class CoinController(
     @GetMapping("/api/coins/transfer")
     fun transfer(@CurrentUserId userId: Int?, targetUserName: String, credits: Int): ResponseBase<String> {
         if (userId == null) return ResponseBase(401, "Unauthorized")
+        if (credits <= 0) return ResponseBase(400, "Credits must be positive")
         val userCoin = userCoinService.getById(userId)
         if (userCoin.balance < credits) return ResponseBase(401, "Not enough credits")
         val targetUser = coreAuthService.getByUsername(targetUserName) ?: return ResponseBase(404, "Target user not found")
@@ -37,7 +38,7 @@ class CoinController(
     }
 
     @GetMapping("/api/coins/me")
-    fun getMyCoins(@CurrentUserId userId: Int?): ResponseBase<Int> {
+    fun getMyCoins(@CurrentUserId userId: Int?): ResponseBase<Long> {
         if (userId == null) return ResponseBase(401, "Unauthorized")
         val userCoin = userCoinService.getById(userId) ?: return ResponseBase(404, "User coin data not found")
         return ResponseBase(userCoin.balance)

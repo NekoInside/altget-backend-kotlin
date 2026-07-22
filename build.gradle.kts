@@ -34,6 +34,8 @@ dependencies {
     implementation(libs.mybatis.plus.jsqlparser)
     implementation(libs.spring.security.webauthn)
     implementation(libs.jackson.module.kotlin)
+    implementation(libs.spring.boot.starter.flyway)
+    runtimeOnly(libs.flyway.mysql)
     implementation(libs.yubico.webauthn.server.core)
     implementation(libs.srp6a)
     implementation(libs.hutool)
@@ -54,6 +56,7 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    systemProperty("spring.flyway.enabled", "false")
 }
 
 // ---------------------------------------------------------------------------

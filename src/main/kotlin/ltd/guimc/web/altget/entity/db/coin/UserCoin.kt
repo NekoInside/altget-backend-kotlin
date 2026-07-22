@@ -11,7 +11,7 @@ class UserCoin {
     @TableId
     var userId: Int = 0
 
-    var balance: Int = 0
+    var balance: Long = 0
 
     @TableField(fill = FieldFill.INSERT)
     var createdAt: LocalDateTime? = null

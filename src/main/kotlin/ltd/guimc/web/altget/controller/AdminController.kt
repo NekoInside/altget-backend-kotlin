@@ -80,7 +80,7 @@ class AdminController(
             name = coreAuth.username ?: "",
             email = coreAuth.email ?: "",
             role = userDetails.userRole,
-            balance = userCoin?.balance ?: 0,
+            balance = userCoin?.balance ?: 0L,
             apiLimitLevel = userApi?.limitLevel ?: EnumApiLimitLevel.LEVEL_LOW,
             registrationTime = userDetails.registerTime.toString(),
             lastLoginIp = userDetails.lastLoginIp,
@@ -202,12 +202,10 @@ class AdminController(
         if (userCoin == null) {
             userCoinService.save(UserCoin().apply {
                 this.userId = targetUserId
-                this.balance = amount
+                this.balance = amount.toLong()
             })
         } else {
-            userCoinService.updateById(userCoin.apply {
-                balance += amount
-            })
+            check(userCoinService.addBalance(targetUserId, amount.toLong())) { "Failed to update user balance" }
         }
         coinTransactionHistoryService.logTransaction(
             userId = targetUserId,
@@ -223,13 +221,9 @@ class AdminController(
     fun subtractCredit(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int, @RequestParam amount: Int, @RealIP ip: String): ResponseBase<String> {
         requireAdmin<String>(userId)?.let { return it }
         if (amount <= 0) return ResponseBase(400, "Amount must be positive")
-        val userCoin = userCoinService.getById(targetUserId)
-            ?: return ResponseBase(404, "User not found")
-        if (userCoin.balance < amount)
+        val userCoin = userCoinService.getById(targetUserId) ?: return ResponseBase(404, "User not found")
+        if (!userCoinService.subtractBalance(targetUserId, amount.toLong()))
             return ResponseBase(400, "User does not have enough credits (balance: ${userCoin.balance})")
-        userCoinService.updateById(userCoin.apply {
-            balance -= amount
-        })
         coinTransactionHistoryService.logTransaction(
             userId = targetUserId,
             amount = -amount,

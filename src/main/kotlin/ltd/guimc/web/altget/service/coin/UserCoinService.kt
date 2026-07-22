@@ -9,20 +9,21 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class UserCoinService(private val coinTransactionHistoryService: CoinTransactionHistoryService) : ServiceImpl<UserCoinMapper, UserCoin>() {
+    fun addBalance(userId: Int, amount: Long): Boolean {
+        require(amount > 0) { "Amount must be positive" }
+        return baseMapper.addBalance(userId, amount, Long.MAX_VALUE - amount) == 1
+    }
+
+    fun subtractBalance(userId: Int, amount: Long): Boolean {
+        require(amount > 0) { "Amount must be positive" }
+        return baseMapper.subtractBalance(userId, amount) == 1
+    }
+
     @Transactional
     fun transfer(fromId: Int, toId: Int, amount: Int) {
-        val fromUserCoin = getById(fromId) ?: throw IllegalArgumentException("用户 $fromId 不存在")
-        val toUserCoin = getById(toId) ?: throw IllegalArgumentException("用户 $toId 不存在")
-
-        if (fromUserCoin.balance < amount) {
-            throw IllegalArgumentException("用户 $fromId 的余额不足")
-        }
-
-        fromUserCoin.balance -= amount
-        toUserCoin.balance += amount
-
-        updateById(fromUserCoin)
-        updateById(toUserCoin)
+        require(amount > 0) { "转账金额必须为正数" }
+        if (!subtractBalance(fromId, amount.toLong())) throw IllegalArgumentException("用户 $fromId 的余额不足或不存在")
+        if (!addBalance(toId, amount.toLong())) throw IllegalArgumentException("用户 $toId 不存在或余额超出限制")
         coinTransactionHistoryService.logTransaction(userId = fromId, amount = -amount, type = EnumTransactionType.TRANSFER_SENT)
         coinTransactionHistoryService.logTransaction(userId = toId, amount = amount, type = EnumTransactionType.TRANSFER_RECEIVED)
     }

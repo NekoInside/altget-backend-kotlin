@@ -72,7 +72,7 @@ class UserController(
             name = coreAuth.username ?: "",
             email = coreAuth.email ?: "",
             role = userDetails.userRole,
-            balance = userCoin?.balance ?: 0,
+            balance = userCoin?.balance ?: 0L,
             apiLimitLevel = userApi?.limitLevel ?: EnumApiLimitLevel.LEVEL_LOW,
             registrationTime = userDetails.registerTime.toString(),
             lastLoginIp = userDetails.lastLoginIp,

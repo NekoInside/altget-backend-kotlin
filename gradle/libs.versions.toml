@@ -31,6 +31,10 @@ mybatis-plus-jsqlparser = { module = "com.baomidou:mybatis-plus-jsqlparser", ver
 # Jackson
 jackson-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 
+# Database migrations
+spring-boot-starter-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
+flyway-mysql = { module = "org.flywaydb:flyway-mysql" }
+
 # Spring Security WebAuthn
 spring-security-webauthn = { module = "org.springframework.security:spring-security-webauthn" }
 

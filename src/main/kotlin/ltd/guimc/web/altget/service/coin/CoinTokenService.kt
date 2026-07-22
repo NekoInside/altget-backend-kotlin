@@ -22,10 +22,7 @@ class CoinTokenService(
             .eq("id", token)
             .last("FOR UPDATE"))
         if (token == null || token.redeemedBy != null) return false
-        val userCoin = userCoinService.getById(userIn) ?: return false
-        userCoinService.updateById(userCoin.apply {
-            balance += token.coinAmount
-        })
+        if (!userCoinService.addBalance(userIn, token.coinAmount.toLong())) return false
         updateById(token.apply {
             redeemedBy = userIn
             redeemedAt = LocalDateTime.now()
