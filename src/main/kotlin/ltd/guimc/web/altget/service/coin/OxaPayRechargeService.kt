@@ -10,6 +10,7 @@ import ltd.guimc.web.altget.mapper.db.coin.OxaPayRechargeOrderMapper
 import ltd.guimc.web.altget.service.coin.oxapay.OxaPayCallback
 import ltd.guimc.web.altget.service.coin.oxapay.OxaPayClient
 import ltd.guimc.web.altget.service.coin.oxapay.OxaPayPricing
+import ltd.guimc.web.altget.service.interfaces.IPageService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -20,7 +21,7 @@ class OxaPayRechargeService(
     private val oxaPayClient: OxaPayClient,
     private val userCoinService: UserCoinService,
     private val coinTransactionHistoryService: CoinTransactionHistoryService,
-) : ServiceImpl<OxaPayRechargeOrderMapper, OxaPayRechargeOrder>() {
+) : ServiceImpl<OxaPayRechargeOrderMapper, OxaPayRechargeOrder>(), IPageService<OxaPayRechargeOrder> {
     fun create(userId: Int, usdAmount: BigDecimal): OxaPayRechargeOrder {
         val price = OxaPayPricing.calculate(usdAmount)
         val order = OxaPayRechargeOrder().apply {

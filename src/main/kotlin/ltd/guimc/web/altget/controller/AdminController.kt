@@ -6,6 +6,7 @@ import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.entity.db.alt.AltConsumptionRecord
 import ltd.guimc.web.altget.entity.db.alt.UsedAltCategory
 import ltd.guimc.web.altget.entity.db.coin.CoinToken
+import ltd.guimc.web.altget.entity.db.coin.OxaPayRechargeOrder
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.entity.db.user.CoreAuth
 import ltd.guimc.web.altget.entity.db.user.UserOperation
@@ -13,11 +14,13 @@ import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.PageResponse
 import ltd.guimc.web.altget.entity.response.alt.AltConsumptionResponse
 import ltd.guimc.web.altget.entity.response.alt.UsedAltResponse
+import ltd.guimc.web.altget.entity.response.coin.AdminOxaPayRechargeResponse
 import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
 import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
 import ltd.guimc.web.altget.entity.response.user.SimpleUserInfo
 import ltd.guimc.web.altget.entity.response.user.UserInfo
 import ltd.guimc.web.altget.enum.EnumApiLimitLevel
+import ltd.guimc.web.altget.enum.EnumOxaPayRechargeStatus
 import ltd.guimc.web.altget.enum.EnumTransactionType
 import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
@@ -25,6 +28,7 @@ import ltd.guimc.web.altget.service.alt.AltConsumptionRecordService
 import ltd.guimc.web.altget.service.alt.UsedAltCategoryService
 import ltd.guimc.web.altget.service.coin.CoinTokenService
 import ltd.guimc.web.altget.service.coin.CoinTransactionHistoryService
+import ltd.guimc.web.altget.service.coin.OxaPayRechargeService
 import ltd.guimc.web.altget.service.coin.UserCoinService
 import ltd.guimc.web.altget.service.user.CoreAuthService
 import ltd.guimc.web.altget.service.user.UserApiService
@@ -50,6 +54,7 @@ class AdminController(
     private val userCoinService: UserCoinService,
     private val coinTokenService: CoinTokenService,
     private val coinTransactionHistoryService: CoinTransactionHistoryService,
+    private val oxaPayRechargeService: OxaPayRechargeService,
     private val userOperationService: UserOperationService,
     private val altConsumptionRecordService: AltConsumptionRecordService,
     private val usedAltCategoryService: UsedAltCategoryService
@@ -143,6 +148,41 @@ class AdminController(
             size = pageResult.size,
             current = pageResult.current,
             pages = pageResult.pages
+        ))
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="List OxaPay Recharges">
+    @GetMapping("/api/admin/oxapay/recharges")
+    fun listOxaPayRecharges(
+        @CurrentUserId userId: Int?,
+        @RequestParam(defaultValue = "1") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(required = false) keyword: String?,
+        @RequestParam(required = false) filterUserId: Int?,
+        @RequestParam(required = false) filterStatus: EnumOxaPayRechargeStatus?,
+    ): ResponseBase<PageResponse<AdminOxaPayRechargeResponse>> {
+        requireAdmin<PageResponse<AdminOxaPayRechargeResponse>>(userId)?.let { return it }
+        val normalizedKeyword = keyword?.trim()
+        val queryWrapper = QueryWrapper<OxaPayRechargeOrder>().apply {
+            if (!normalizedKeyword.isNullOrEmpty()) {
+                nested { wrapper ->
+                    wrapper.like("id", normalizedKeyword)
+                        .or()
+                        .like("track_id", normalizedKeyword)
+                }
+            }
+            filterUserId?.let { eq("user_id", it) }
+            filterStatus?.let { eq("status", it.value) }
+            orderByDesc("created_at")
+        }
+        val pageResult = oxaPayRechargeService.getPage(page, size, queryWrapper)
+        return ResponseBase(PageResponse(
+            records = pageResult.records.map(AdminOxaPayRechargeResponse::from),
+            total = pageResult.total,
+            size = pageResult.size,
+            current = pageResult.current,
+            pages = pageResult.pages,
         ))
     }
     // </editor-fold>
