@@ -27,7 +27,7 @@ class CookieConvertService(
             HttpUtil.createPost(properties.upstreamUrl)
                 .header("Content-Type", "application/json")
                 .timeout(properties.timeoutMillis)
-                .body(JSONUtil.toJsonStr(mapOf("account" to account, "password" to password)))
+                .body(JSONUtil.toJsonStr(mapOf("username" to account, "password" to password)))
                 .execute()
         } catch (_: Exception) {
             return CookieConvertResult.failure(UNAVAILABLE_MESSAGE)
