@@ -23,4 +23,5 @@ enum class EnumUserOperation(
     PASSKEY_LOGIN(14, "Passkey登录"),
     ADMIN_TOKEN_REMOVE(15, "管理员删除Token"),
     USED_ALT_EXPORT(16, "导出小号记录"),
+    COOKIE_CONVERT(17, "Cookie转换"),
 }

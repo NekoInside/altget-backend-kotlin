@@ -14,5 +14,6 @@ enum class EnumTransactionType(
     TRANSFER_RECEIVED("TRANSFER_RECEIVED", "转账接收"),
     PAID_USER_API_FETCH("PAID_USER_API_FETCH", "付费API调用"),
     SAUTH_CONVERT("SAUTH_CONVERT", "Sauth转换"),
+    COOKIE_CONVERT("COOKIE_CONVERT", "Cookie转换"),
     OXAPAY_RECHARGE("OXAPAY_RECHARGE", "OxaPay充值"),
 }

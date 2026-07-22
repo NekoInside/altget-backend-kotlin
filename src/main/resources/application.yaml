@@ -85,6 +85,10 @@ oxapay:
   sandbox: ${OXAPAY_SANDBOX:false}
   timeout-millis: 10000
 
+cookie-convert:
+  upstream-url: ${COOKIE_CONVERT_UPSTREAM_URL:}
+  timeout-millis: 10000
+
 jwt:
   secret: your-jwt-secret-key-here-at-least-256-bits
   issuer: altget
