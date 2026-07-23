@@ -5,7 +5,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
+import ltd.guimc.web.altget.entity.db.user.UserDetails
+import ltd.guimc.web.altget.enum.EnumUserRole
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
 
 class RequestInterceptorTest {
 
@@ -35,5 +39,33 @@ class RequestInterceptorTest {
         interceptor.preHandle(request, MockHttpServletResponse(), Any())
 
         assertEquals("8.8.4.4", request.getAttribute(RequestInterceptor.REAL_IP_ATTRIBUTE))
+    }
+
+    @Test
+    fun `returns http 401 for an unauthenticated admin request`() {
+        val request = MockHttpServletRequest().apply {
+            requestURI = "/api/admin/me"
+        }
+        val response = MockHttpServletResponse()
+
+        assertFalse(interceptor.preHandle(request, response, Any()))
+        assertEquals(401, response.status)
+    }
+
+    @Test
+    fun `returns http 403 for a non-admin admin request`() {
+        `when`(jwtTokenComponent.getUserIdFromToken("token")).thenReturn(7)
+        `when`(userDetailsService.getById(7)).thenReturn(UserDetails().apply {
+            userId = 7
+            userRole = EnumUserRole.VERIFY
+        })
+        val request = MockHttpServletRequest().apply {
+            requestURI = "/api/admin/me"
+            addHeader("X-Ciallo-Auth", "token")
+        }
+        val response = MockHttpServletResponse()
+
+        assertFalse(interceptor.preHandle(request, response, Any()))
+        assertEquals(403, response.status)
     }
 }

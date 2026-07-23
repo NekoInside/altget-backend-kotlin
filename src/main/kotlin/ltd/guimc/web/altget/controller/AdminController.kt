@@ -1,6 +1,7 @@
 package ltd.guimc.web.altget.controller
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
+import ltd.guimc.web.altget.component.AdminBadRequestException
 import ltd.guimc.web.altget.annotations.CurrentUserId
 import ltd.guimc.web.altget.annotations.RealIP
 import ltd.guimc.web.altget.entity.db.alt.AltConsumptionRecord
@@ -16,6 +17,7 @@ import ltd.guimc.web.altget.entity.response.PageResponse
 import ltd.guimc.web.altget.entity.response.alt.AltConsumptionResponse
 import ltd.guimc.web.altget.entity.response.alt.UsedAltResponse
 import ltd.guimc.web.altget.entity.response.admin.AdminDashboardSummaryResponse
+import ltd.guimc.web.altget.entity.response.admin.AdminProfileResponse
 import ltd.guimc.web.altget.entity.response.coin.AdminOxaPayRechargeResponse
 import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
 import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
@@ -28,6 +30,11 @@ import ltd.guimc.web.altget.enum.EnumUserOperation
 import ltd.guimc.web.altget.enum.EnumUserRole
 import ltd.guimc.web.altget.service.alt.AltConsumptionRecordService
 import ltd.guimc.web.altget.service.alt.UsedAltCategoryService
+import ltd.guimc.web.altget.service.admin.AdminCsvExportService
+import ltd.guimc.web.altget.service.admin.AdminList
+import ltd.guimc.web.altget.service.admin.AdminSort
+import ltd.guimc.web.altget.service.admin.AdminSortSpec
+import ltd.guimc.web.altget.service.admin.CurrentAdminService
 import ltd.guimc.web.altget.service.coin.CoinTokenService
 import ltd.guimc.web.altget.service.coin.CoinTransactionHistoryService
 import ltd.guimc.web.altget.service.coin.OxaPayRechargeService
@@ -37,12 +44,14 @@ import ltd.guimc.web.altget.service.user.UserApiService
 import ltd.guimc.web.altget.service.user.UserDetailsService
 import ltd.guimc.web.altget.service.user.UserOperationService
 import org.springframework.transaction.annotation.Transactional
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDateTime
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.Instant
@@ -59,7 +68,9 @@ class AdminController(
     private val oxaPayRechargeService: OxaPayRechargeService,
     private val userOperationService: UserOperationService,
     private val altConsumptionRecordService: AltConsumptionRecordService,
-    private val usedAltCategoryService: UsedAltCategoryService
+    private val usedAltCategoryService: UsedAltCategoryService,
+    private val currentAdminService: CurrentAdminService,
+    private val adminCsvExportService: AdminCsvExportService,
 ) {
     // <editor-fold desc="Helper">
     /**
@@ -117,9 +128,75 @@ class AdminController(
             role = userDetails.userRole,
         )
     }
+
+    private fun validatePage(page: Int, size: Int) {
+        if (page < 1) throw AdminBadRequestException("page must be at least 1")
+        if (size !in 1..100) throw AdminBadRequestException("size must be between 1 and 100")
+    }
+
+    private fun <T> QueryWrapper<T>.applySort(spec: AdminSortSpec) {
+        orderBy(true, spec.ascending, spec.column)
+        if (spec.column != spec.tieBreakerColumn) {
+            orderBy(true, spec.ascending, spec.tieBreakerColumn)
+        }
+    }
+
+    private fun tooManyExportRecords(total: Long) {
+        if (total > AdminCsvExportService.MAX_EXPORT_RECORDS) {
+            throw AdminBadRequestException(
+                "Export contains $total records; maximum is ${AdminCsvExportService.MAX_EXPORT_RECORDS}",
+            )
+        }
+    }
+
+    private fun prepareCsvResponse(response: HttpServletResponse, filePrefix: String) {
+        response.characterEncoding = Charsets.UTF_8.name()
+        response.contentType = "text/csv; charset=UTF-8"
+        response.setHeader(
+            "Content-Disposition",
+            "attachment; filename=\"$filePrefix-${LocalDate.now()}.csv\"",
+        )
+    }
+
+    private fun auditExport(userId: Int, type: String, filters: String, count: Long, ip: String) {
+        userOperationService.log(
+            userId,
+            EnumUserOperation.ADMIN_DATA_EXPORT,
+            "Exported $type records=$count filters=$filters",
+            ip,
+        )
+    }
+
+    private fun userKeywordQuery(keyword: String?): QueryWrapper<CoreAuth> {
+        val normalizedKeyword = keyword?.trim()
+        return QueryWrapper<CoreAuth>().apply {
+            if (!normalizedKeyword.isNullOrEmpty()) {
+                nested { wrapper ->
+                    normalizedKeyword.toIntOrNull()?.let { wrapper.eq("user_id", it).or() }
+                    wrapper.like("username", normalizedKeyword)
+                        .or()
+                        .like("email", normalizedKeyword)
+                }
+            }
+        }
+    }
+
+    private fun matchingUserIds(keyword: String?): List<Int>? {
+        if (keyword?.trim().isNullOrEmpty()) return null
+        return coreAuthService.list(userKeywordQuery(keyword)).map { it.userId }
+    }
+
     // </editor-fold>
 
     // <editor-fold desc="Dashboard Summary">
+    @GetMapping("/api/admin/me")
+    fun getCurrentAdmin(@CurrentUserId userId: Int?): ResponseBase<AdminProfileResponse> {
+        requireAdmin<AdminProfileResponse>(userId)?.let { return it }
+        val profile = currentAdminService.getProfile(userId!!)
+            ?: return ResponseBase(404, "Admin profile not found")
+        return ResponseBase(profile)
+    }
+
     @GetMapping("/api/admin/dashboard")
     fun getDashboardSummary(@CurrentUserId userId: Int?): ResponseBase<AdminDashboardSummaryResponse> {
         requireAdmin<AdminDashboardSummaryResponse>(userId)?.let { return it }
@@ -163,24 +240,29 @@ class AdminController(
         @CurrentUserId userId: Int?,
         @RequestParam size: Int = 20,
         @RequestParam page: Int = 1,
-        @RequestParam(required = false) keyword: String?
+        @RequestParam(required = false) keyword: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
     ): ResponseBase<PageResponse<SimpleUserInfo>> {
         requireAdmin<PageResponse<SimpleUserInfo>>(userId)?.let { return it }
-        val normalizedKeyword = keyword?.trim()
-        val queryWrapper = QueryWrapper<CoreAuth>().apply {
-            if (!normalizedKeyword.isNullOrEmpty()) {
-                nested { wrapper ->
-                    normalizedKeyword.toIntOrNull()?.let { wrapper.eq("user_id", it).or() }
-                    wrapper.like("username", normalizedKeyword)
-                        .or()
-                        .like("email", normalizedKeyword)
-                }
+        validatePage(page, size)
+        val sort = AdminSort.resolve(AdminList.USERS, sortBy, sortDirection)
+        val pageResult = if (sort.column == "user_role") {
+            val matchingIds = matchingUserIds(keyword)
+            if (matchingIds != null && matchingIds.isEmpty()) {
+                return ResponseBase(PageResponse(emptyList(), 0, size.toLong(), page.toLong(), 0))
             }
-            orderByDesc("user_id")
+            val detailsQuery = QueryWrapper<UserDetails>().apply {
+                matchingIds?.let { inSqlIds -> `in`("user_id", inSqlIds) }
+                applySort(sort)
+            }
+            userDetailsService.getPage(page, size, detailsQuery)
+        } else {
+            coreAuthService.getPage(page, size, userKeywordQuery(keyword).apply { applySort(sort) })
         }
-        val pageResult = coreAuthService.getPage(page, size, queryWrapper)
-        val userInfoList = pageResult.records.mapNotNull { coreAuth ->
-            buildSimpleUserInfo(coreAuth.userId)
+        val userInfoList = pageResult.records.mapNotNull { record ->
+            val recordUserId = if (record is UserDetails) record.userId else (record as CoreAuth).userId
+            recordUserId?.let { buildSimpleUserInfo(it) }
         }
         return ResponseBase(PageResponse(
             records = userInfoList,
@@ -201,8 +283,12 @@ class AdminController(
         @RequestParam(required = false) keyword: String?,
         @RequestParam(required = false) filterUserId: Int?,
         @RequestParam(required = false) filterStatus: EnumOxaPayRechargeStatus?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
     ): ResponseBase<PageResponse<AdminOxaPayRechargeResponse>> {
         requireAdmin<PageResponse<AdminOxaPayRechargeResponse>>(userId)?.let { return it }
+        validatePage(page, size)
+        val sort = AdminSort.resolve(AdminList.OXAPAY_RECHARGES, sortBy, sortDirection)
         val normalizedKeyword = keyword?.trim()
         val queryWrapper = QueryWrapper<OxaPayRechargeOrder>().apply {
             if (!normalizedKeyword.isNullOrEmpty()) {
@@ -214,7 +300,7 @@ class AdminController(
             }
             filterUserId?.let { eq("user_id", it) }
             filterStatus?.let { eq("status", it.value) }
-            orderByDesc("created_at")
+            applySort(sort)
         }
         val pageResult = oxaPayRechargeService.getPage(page, size, queryWrapper)
         return ResponseBase(PageResponse(
@@ -225,6 +311,206 @@ class AdminController(
             pages = pageResult.pages,
         ))
     }
+    // </editor-fold>
+
+    // <editor-fold desc="CSV Exports">
+    @GetMapping("/api/admin/users/export")
+    fun exportUsers(
+        @CurrentUserId userId: Int?,
+        @RequestParam(required = false) keyword: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
+        @RealIP ip: String,
+        response: HttpServletResponse,
+    ) {
+        requireAdmin<Unit>(userId)?.let { return }
+        val sort = AdminSort.resolve(AdminList.USERS, sortBy, sortDirection)
+        val matchingIds = matchingUserIds(keyword)
+        val (total, users) = if (sort.column == "user_role") {
+            if (matchingIds != null && matchingIds.isEmpty()) {
+                0L to emptyList()
+            } else {
+                val query = QueryWrapper<UserDetails>().apply {
+                    matchingIds?.let { `in`("user_id", it) }
+                    applySort(sort)
+                }
+                userDetailsService.count(query) to userDetailsService.list(query)
+                    .mapNotNull { it.userId?.let(::buildSimpleUserInfo) }
+            }
+        } else {
+            val query = userKeywordQuery(keyword).apply { applySort(sort) }
+            coreAuthService.count(query) to coreAuthService.list(query)
+                .mapNotNull { buildSimpleUserInfo(it.userId) }
+        }
+        tooManyExportRecords(total)
+        prepareCsvResponse(response, "users")
+        adminCsvExportService.write(
+            response.outputStream,
+            listOf("id", "name", "email", "role"),
+            users.asSequence().map { listOf(it.id, it.name, it.email, it.role.name) },
+        )
+        auditExport(userId!!, "users", exportFilters("keyword" to keyword, "sortBy" to sortBy, "sortDirection" to sortDirection), total, ip)
+    }
+
+    @GetMapping("/api/admin/tokens/export")
+    fun exportTokens(
+        @CurrentUserId userId: Int?,
+        @RequestParam(defaultValue = "") keyword: String,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
+        @RealIP ip: String,
+        response: HttpServletResponse,
+    ) {
+        requireAdmin<Unit>(userId)?.let { return }
+        val sort = AdminSort.resolve(AdminList.TOKENS, sortBy, sortDirection)
+        val query = QueryWrapper<CoinToken>().apply {
+            keyword.trim().takeIf { it.isNotEmpty() }?.let { like("id", it) }
+            applySort(sort)
+        }
+        val total = coinTokenService.count(query)
+        tooManyExportRecords(total)
+        val tokens = coinTokenService.list(query)
+        prepareCsvResponse(response, "tokens")
+        // Deliberately omit the token id: it is the redeemable token value.
+        adminCsvExportService.write(
+            response.outputStream,
+            listOf("coinAmount", "createdBy", "createdAt", "redeemedBy", "redeemedAt", "isUsed"),
+            tokens.asSequence().map {
+                listOf(it.coinAmount, it.createdBy, it.createdAt, it.redeemedBy, it.redeemedAt, it.isUsed)
+            },
+        )
+        auditExport(userId!!, "tokens", exportFilters("keyword" to keyword, "sortBy" to sortBy, "sortDirection" to sortDirection), total, ip)
+    }
+
+    @GetMapping("/api/admin/operations/export")
+    fun exportOperations(
+        @CurrentUserId userId: Int?,
+        @RequestParam(required = false) filterUserId: Int?,
+        @RequestParam(required = false) filterOperation: Int?,
+        @RequestParam(required = false) filterTimeStart: String?,
+        @RequestParam(required = false) filterTimeEnd: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
+        @RealIP ip: String,
+        response: HttpServletResponse,
+    ) {
+        requireAdmin<Unit>(userId)?.let { return }
+        val sort = AdminSort.resolve(AdminList.OPERATIONS, sortBy, sortDirection)
+        val query = QueryWrapper<UserOperation>()
+            .apply { filterUserId?.let { eq("user_id", it) } }
+            .apply { filterOperation?.let { eq("operation", it) } }
+            .apply { filterTimeStart?.takeIf { it.isNotBlank() }?.let { ge("operation_time", it) } }
+            .apply { filterTimeEnd?.takeIf { it.isNotBlank() }?.let { le("operation_time", it) } }
+            .apply { applySort(sort) }
+        val total = userOperationService.count(query)
+        tooManyExportRecords(total)
+        val operations = userOperationService.list(query)
+        prepareCsvResponse(response, "operations")
+        adminCsvExportService.write(
+            response.outputStream,
+            listOf("operationId", "userId", "username", "operation", "description", "ip", "geoip", "operationTime"),
+            operations.asSequence().map {
+                listOf(it.operationId, it.userId, it.username, it.operation?.name, it.description, it.ip, it.geoip, it.operationTime)
+            },
+        )
+        auditExport(
+            userId!!,
+            "operations",
+            exportFilters("filterUserId" to filterUserId, "filterOperation" to filterOperation, "filterTimeStart" to filterTimeStart, "filterTimeEnd" to filterTimeEnd, "sortBy" to sortBy, "sortDirection" to sortDirection),
+            total,
+            ip,
+        )
+    }
+
+    @GetMapping("/api/admin/used-alts/export")
+    fun exportUsedAlts(
+        @CurrentUserId userId: Int?,
+        @RequestParam(required = false) filterIp: String?,
+        @RequestParam(required = false) filterUserId: Int?,
+        @RequestParam(required = false) filterChannel: String?,
+        @RequestParam(required = false) filterUsername: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
+        @RealIP ip: String,
+        response: HttpServletResponse,
+    ) {
+        requireAdmin<Unit>(userId)?.let { return }
+        val sort = AdminSort.resolve(AdminList.USED_ALTS, sortBy, sortDirection)
+        val normalizedUsername = filterUsername?.trim()
+        val query = QueryWrapper<UsedAltCategory>()
+            .apply { filterIp?.let { eq("operation_ip", it) } }
+            .apply { filterUserId?.let { eq("user_id", it) } }
+            .apply { filterChannel?.let { eq("channel", it) } }
+            .apply { normalizedUsername?.takeIf { it.isNotEmpty() }?.let { like("username", it) } }
+            .apply { applySort(sort) }
+        val total = usedAltCategoryService.count(query)
+        tooManyExportRecords(total)
+        val alts = usedAltCategoryService.list(query)
+        prepareCsvResponse(response, "used-alts")
+        // Deliberately omit password; this export is an audit report, not a credential dump.
+        adminCsvExportService.write(
+            response.outputStream,
+            listOf("id", "username", "channel", "userId", "operationIp", "fetchMethod", "fetchTime", "createdAt"),
+            alts.asSequence().map {
+                listOf(it.id, it.username, it.channel, it.userId, it.operationIp, it.fetchMethod, it.fetchTime, it.createdAt)
+            },
+        )
+        auditExport(
+            userId!!,
+            "used-alts",
+            exportFilters("filterIp" to filterIp, "filterUserId" to filterUserId, "filterChannel" to filterChannel, "filterUsername" to filterUsername, "sortBy" to sortBy, "sortDirection" to sortDirection),
+            total,
+            ip,
+        )
+    }
+
+    @GetMapping("/api/admin/oxapay/recharges/export")
+    fun exportOxaPayRecharges(
+        @CurrentUserId userId: Int?,
+        @RequestParam(required = false) keyword: String?,
+        @RequestParam(required = false) filterUserId: Int?,
+        @RequestParam(required = false) filterStatus: EnumOxaPayRechargeStatus?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
+        @RealIP ip: String,
+        response: HttpServletResponse,
+    ) {
+        requireAdmin<Unit>(userId)?.let { return }
+        val sort = AdminSort.resolve(AdminList.OXAPAY_RECHARGES, sortBy, sortDirection)
+        val normalizedKeyword = keyword?.trim()
+        val query = QueryWrapper<OxaPayRechargeOrder>().apply {
+            normalizedKeyword?.takeIf { it.isNotEmpty() }?.let {
+                nested { wrapper ->
+                    wrapper.like("id", it).or().like("track_id", it)
+                }
+            }
+            filterUserId?.let { eq("user_id", it) }
+            filterStatus?.let { eq("status", it.value) }
+            applySort(sort)
+        }
+        val total = oxaPayRechargeService.count(query)
+        tooManyExportRecords(total)
+        val orders = oxaPayRechargeService.list(query)
+        prepareCsvResponse(response, "oxapay-recharges")
+        adminCsvExportService.write(
+            response.outputStream,
+            listOf("orderId", "userId", "trackId", "usdAmount", "cnyAmount", "coinAmount", "status", "expiredAt", "paidAt", "createdAt", "updatedAt"),
+            orders.asSequence().map {
+                listOf(it.id, it.userId, it.trackId, it.usdAmount, it.cnyAmount, it.coinAmount, it.status.name, it.expiredAt, it.paidAt, it.createdAt, it.updatedAt)
+            },
+        )
+        auditExport(
+            userId!!,
+            "oxapay-recharges",
+            exportFilters("keyword" to keyword, "filterUserId" to filterUserId, "filterStatus" to filterStatus, "sortBy" to sortBy, "sortDirection" to sortDirection),
+            total,
+            ip,
+        )
+    }
+
+    private fun exportFilters(vararg values: Pair<String, Any?>): String = values
+        .filter { it.second != null && it.second.toString().isNotBlank() }
+        .joinToString(",") { (name, value) -> "$name=$value" }
     // </editor-fold>
 
     // <editor-fold desc="Get OxaPay Recharge">
@@ -355,14 +641,19 @@ class AdminController(
         @RequestParam(defaultValue = "1") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
         @RequestParam(defaultValue = "") keyword: String,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
     ): ResponseBase<PageResponse<CoinTokenResponse>> {
         requireAdmin<PageResponse<CoinTokenResponse>>(userId)?.let { return it }
+        validatePage(page, size)
+        val sort = AdminSort.resolve(AdminList.TOKENS, sortBy, sortDirection)
         val queryWrapper = QueryWrapper<CoinToken>().apply {
-            if (keyword.isNotEmpty()) {
+            if (keyword.trim().isNotEmpty()) {
                 nested { wrapper ->
-                    wrapper.like("id", keyword)
+                    wrapper.like("id", keyword.trim())
                 }
             }
+            applySort(sort)
         }
         val pageResult = coinTokenService.getPage(page, size, queryWrapper)
         val tokenList = pageResult.records.map { token ->
@@ -408,15 +699,19 @@ class AdminController(
         @RequestParam(required = false) filterUserId: Int?,
         @RequestParam(required = false) filterOperation: Int?,
         @RequestParam(required = false) filterTimeStart: String?,
-        @RequestParam(required = false) filterTimeEnd: String?
+        @RequestParam(required = false) filterTimeEnd: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
     ): ResponseBase<PageResponse<AdminOperationLogResponse>> {
         requireAdmin<PageResponse<AdminOperationLogResponse>>(userId)?.let { return it }
+        validatePage(page, size)
+        val sort = AdminSort.resolve(AdminList.OPERATIONS, sortBy, sortDirection)
         val queryWrapper = QueryWrapper<UserOperation>()
             .apply { filterUserId?.let { eq("user_id", it) } }
             .apply { filterOperation?.let { eq("operation", it) } }
             .apply { filterTimeStart?.let { ge("operation_time", it) } }
             .apply { filterTimeEnd?.let { le("operation_time", it) } }
-            .orderByDesc("operation_time")
+            .apply { applySort(sort) }
         val pageResult = userOperationService.getPage(page, size, queryWrapper)
         val logs = pageResult.records.map { op ->
             AdminOperationLogResponse(
@@ -481,16 +776,20 @@ class AdminController(
         @RequestParam(required = false) filterIp: String?,
         @RequestParam(required = false) filterUserId: Int?,
         @RequestParam(required = false) filterChannel: String?,
-        @RequestParam(required = false) filterUsername: String?
+        @RequestParam(required = false) filterUsername: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(defaultValue = "desc") sortDirection: String,
     ): ResponseBase<PageResponse<UsedAltResponse>> {
         requireAdmin<PageResponse<UsedAltResponse>>(userId)?.let { return it }
+        validatePage(page, size)
+        val sort = AdminSort.resolve(AdminList.USED_ALTS, sortBy, sortDirection)
         val normalizedUsername = filterUsername?.trim()
         val queryWrapper = QueryWrapper<UsedAltCategory>()
             .apply { filterIp?.let { eq("operation_ip", it) } }
             .apply { filterUserId?.let { eq("user_id", it) } }
             .apply { filterChannel?.let { eq("channel", it) } }
             .apply { if (!normalizedUsername.isNullOrEmpty()) like("username", normalizedUsername) }
-            .orderByDesc("fetch_time")
+            .apply { applySort(sort) }
         val pageResult = usedAltCategoryService.getPage(page, size, queryWrapper)
         val records = pageResult.records.map { alt ->
             UsedAltResponse(

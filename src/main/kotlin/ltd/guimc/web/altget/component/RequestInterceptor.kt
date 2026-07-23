@@ -27,7 +27,34 @@ class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent,
         val realIp = resolveRealIp(request)
         request.setAttribute(REAL_IP_ATTRIBUTE, realIp)
 
+        if (isAdminEndpoint(request)) {
+            val userId = request.getAttribute(USER_ID_ATTRIBUTE) as? Int
+            val status = when {
+                userId == null -> 401
+                userDetailsService.getById(userId)?.userRole != EnumUserRole.ADMIN -> 403
+                else -> null
+            }
+            if (status != null) {
+                response.status = status
+                response.characterEncoding = Charsets.UTF_8.name()
+                response.contentType = "application/json"
+                response.writer.write(
+                    if (status == 401) {
+                        "{\"code\":401,\"message\":\"Unauthorized\",\"data\":null}"
+                    } else {
+                        "{\"code\":403,\"message\":\"Forbidden: Admin role required\",\"data\":null}"
+                    },
+                )
+                return false
+            }
+        }
+
         return true
+    }
+
+    private fun isAdminEndpoint(request: HttpServletRequest): Boolean {
+        val path = request.requestURI.removePrefix(request.contextPath ?: "")
+        return path == "/api/admin" || path.startsWith("/api/admin/")
     }
 
     private fun resolveRealIp(request: HttpServletRequest): String {
