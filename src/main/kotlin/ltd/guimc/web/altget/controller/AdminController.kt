@@ -227,6 +227,19 @@ class AdminController(
     }
     // </editor-fold>
 
+    // <editor-fold desc="Get OxaPay Recharge">
+    @GetMapping("/api/admin/oxapay/recharge/{orderId}")
+    fun getOxaPayRecharge(
+        @CurrentUserId userId: Int?,
+        @PathVariable orderId: String,
+    ): ResponseBase<AdminOxaPayRechargeResponse> {
+        requireAdmin<AdminOxaPayRechargeResponse>(userId)?.let { return it }
+        val order = oxaPayRechargeService.getById(orderId)
+            ?: return ResponseBase(404, "Recharge order not found")
+        return ResponseBase(AdminOxaPayRechargeResponse.from(order))
+    }
+    // </editor-fold>
+
     // <editor-fold desc="Get User">
     @GetMapping("/api/admin/user/{targetUserId}")
     fun getUser(@CurrentUserId userId: Int?, @PathVariable targetUserId: Int): ResponseBase<UserInfo> {
@@ -427,6 +440,30 @@ class AdminController(
     }
     // </editor-fold>
 
+    // <editor-fold desc="Get Operation Log">
+    @GetMapping("/api/admin/operation/{operationId}")
+    fun getOperation(
+        @CurrentUserId userId: Int?,
+        @PathVariable operationId: String,
+    ): ResponseBase<AdminOperationLogResponse> {
+        requireAdmin<AdminOperationLogResponse>(userId)?.let { return it }
+        val operation = userOperationService.getById(operationId)
+            ?: return ResponseBase(404, "Operation not found")
+        return ResponseBase(
+            AdminOperationLogResponse(
+                operationId = operation.operationId ?: "",
+                operationTime = operation.operationTime.toString(),
+                userId = operation.userId,
+                username = operation.username ?: "",
+                operation = operation.operation ?: EnumUserOperation.LOGIN,
+                description = operation.description ?: "",
+                ip = operation.ip,
+                geoip = operation.geoip,
+            )
+        )
+    }
+    // </editor-fold>
+
     // <editor-fold desc="List Used Alts">
     /**
      * Query consumed (used) alts with optional filters.
@@ -475,6 +512,31 @@ class AdminController(
             current = pageResult.current,
             pages = pageResult.pages
         ))
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Get Used Alt">
+    @GetMapping("/api/admin/used-alt/{id}")
+    fun getUsedAlt(
+        @CurrentUserId userId: Int?,
+        @PathVariable id: Long,
+    ): ResponseBase<UsedAltResponse> {
+        requireAdmin<UsedAltResponse>(userId)?.let { return it }
+        val alt = usedAltCategoryService.getById(id)
+            ?: return ResponseBase(404, "Used alt not found")
+        return ResponseBase(
+            UsedAltResponse(
+                id = alt.id,
+                username = alt.username,
+                password = alt.password,
+                channel = alt.channel,
+                userId = alt.userId,
+                operationIp = alt.operationIp,
+                fetchMethod = alt.fetchMethod,
+                fetchTime = alt.fetchTime.toString(),
+                createdAt = alt.createdAt?.toString(),
+            )
+        )
     }
     // </editor-fold>
 
