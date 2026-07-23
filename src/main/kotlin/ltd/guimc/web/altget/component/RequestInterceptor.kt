@@ -22,6 +22,12 @@ class RequestInterceptor(private val jwtTokenComponent: JwtTokenComponent,
     private val log = LoggerFactory.getLogger(RequestInterceptor::class.java)
 
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
+        // Browser CORS preflight requests normally do not carry the auth token.
+        // Let Spring's CORS handling finish the OPTIONS response before auth checks.
+        if (request.method.equals("OPTIONS", ignoreCase = true)) {
+            return true
+        }
+
         resolveUserId(request)
 
         val realIp = resolveRealIp(request)

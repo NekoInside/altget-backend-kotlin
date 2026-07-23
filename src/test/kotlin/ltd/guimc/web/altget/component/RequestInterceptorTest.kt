@@ -8,6 +8,7 @@ import org.springframework.mock.web.MockHttpServletResponse
 import ltd.guimc.web.altget.entity.db.user.UserDetails
 import ltd.guimc.web.altget.enum.EnumUserRole
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 
@@ -67,5 +68,18 @@ class RequestInterceptorTest {
 
         assertFalse(interceptor.preHandle(request, response, Any()))
         assertEquals(403, response.status)
+    }
+
+    @Test
+    fun `allows cors preflight without authentication`() {
+        val request = MockHttpServletRequest().apply {
+            method = "OPTIONS"
+            requestURI = "/api/admin/me"
+            addHeader("Origin", "http://localhost:3000")
+            addHeader("Access-Control-Request-Method", "GET")
+            addHeader("Access-Control-Request-Headers", "X-Ciallo-Auth")
+        }
+
+        assertTrue(interceptor.preHandle(request, MockHttpServletResponse(), Any()))
     }
 }

@@ -28,8 +28,9 @@ class WebMvcConfig(
     override fun addCorsMappings(registry: CorsRegistry) {
         registry.addMapping("/**")
             .allowedOriginPatterns("*")
-            .allowedMethods("*")
+            .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
             .allowedHeaders("*")
+            .exposedHeaders("Content-Disposition")
             .allowCredentials(true)
             .maxAge(3600)
     }
