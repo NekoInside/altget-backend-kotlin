@@ -9,11 +9,13 @@ import ltd.guimc.web.altget.entity.db.coin.CoinToken
 import ltd.guimc.web.altget.entity.db.coin.OxaPayRechargeOrder
 import ltd.guimc.web.altget.entity.db.coin.UserCoin
 import ltd.guimc.web.altget.entity.db.user.CoreAuth
+import ltd.guimc.web.altget.entity.db.user.UserDetails
 import ltd.guimc.web.altget.entity.db.user.UserOperation
 import ltd.guimc.web.altget.entity.response.ResponseBase
 import ltd.guimc.web.altget.entity.response.PageResponse
 import ltd.guimc.web.altget.entity.response.alt.AltConsumptionResponse
 import ltd.guimc.web.altget.entity.response.alt.UsedAltResponse
+import ltd.guimc.web.altget.entity.response.admin.AdminDashboardSummaryResponse
 import ltd.guimc.web.altget.entity.response.coin.AdminOxaPayRechargeResponse
 import ltd.guimc.web.altget.entity.response.user.AdminOperationLogResponse
 import ltd.guimc.web.altget.entity.response.user.CoinTokenResponse
@@ -113,6 +115,44 @@ class AdminController(
             name = coreAuth.username ?: "",
             email = coreAuth.email ?: "",
             role = userDetails.userRole,
+        )
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Dashboard Summary">
+    @GetMapping("/api/admin/dashboard")
+    fun getDashboardSummary(@CurrentUserId userId: Int?): ResponseBase<AdminDashboardSummaryResponse> {
+        requireAdmin<AdminDashboardSummaryResponse>(userId)?.let { return it }
+        val recentOperations = userOperationService.getPage(
+            1,
+            6,
+            QueryWrapper<UserOperation>().orderByDesc("operation_time")
+        ).records.map { op ->
+            AdminOperationLogResponse(
+                operationId = op.operationId ?: "",
+                operationTime = op.operationTime.toString(),
+                userId = op.userId,
+                username = op.username ?: "",
+                operation = op.operation ?: EnumUserOperation.LOGIN,
+                description = op.description ?: "",
+                ip = op.ip,
+                geoip = op.geoip
+            )
+        }
+        return ResponseBase(
+            AdminDashboardSummaryResponse(
+                totalUsers = coreAuthService.count(),
+                verifiedUsers = userDetailsService.count(
+                    QueryWrapper<UserDetails>().eq("user_role", EnumUserRole.VERIFY.role)
+                ),
+                availableTokens = coinTokenService.count(
+                    QueryWrapper<CoinToken>().eq("is_used", false)
+                ),
+                paidRechargeOrders = oxaPayRechargeService.count(
+                    QueryWrapper<OxaPayRechargeOrder>().eq("status", EnumOxaPayRechargeStatus.PAID.value)
+                ),
+                recentOperations = recentOperations,
+            )
         )
     }
     // </editor-fold>
