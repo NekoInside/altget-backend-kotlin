@@ -29,7 +29,7 @@ data class AdminOxaPayRechargeResponse(
             usdAmount = order.usdAmount,
             cnyAmount = order.cnyAmount,
             coinAmount = order.coinAmount,
-            status = order.status,
+            status = order.statusAt(),
             paymentUrl = order.paymentUrl,
             expiredAt = order.expiredAt?.toInstant(ZoneOffset.UTC),
             paidAt = order.paidAt,

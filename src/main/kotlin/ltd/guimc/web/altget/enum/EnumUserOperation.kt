@@ -25,4 +25,6 @@ enum class EnumUserOperation(
     USED_ALT_EXPORT(16, "导出小号记录"),
     COOKIE_CONVERT(17, "Cookie转换"),
     ADMIN_DATA_EXPORT(18, "管理员导出数据"),
+    ADMIN_OXAPAY_STATUS(19, "Admin OxaPay recharge status update"),
+    ADMIN_OXAPAY_TOP_UP(20, "Admin OxaPay recharge top-up"),
 }

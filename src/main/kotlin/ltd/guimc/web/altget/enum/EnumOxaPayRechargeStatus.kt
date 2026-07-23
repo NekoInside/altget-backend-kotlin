@@ -8,5 +8,7 @@ enum class EnumOxaPayRechargeStatus(
 ) {
     PENDING("PENDING"),
     CREATE_FAILED("CREATE_FAILED"),
+    EXPIRED("EXPIRED"),
+    PAID_AFTER_EXPIRATION("PAID_AFTER_EXPIRATION"),
     PAID("PAID"),
 }

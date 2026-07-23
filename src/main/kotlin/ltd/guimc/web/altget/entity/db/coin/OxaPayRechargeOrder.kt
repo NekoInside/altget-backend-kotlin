@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.annotation.TableName
 import ltd.guimc.web.altget.enum.EnumOxaPayRechargeStatus
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @TableName("oxapay_recharge_order")
@@ -38,4 +39,15 @@ class OxaPayRechargeOrder {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     var updatedAt: LocalDateTime? = null
+
+    fun statusAt(now: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)): EnumOxaPayRechargeStatus {
+        return if (
+            status == EnumOxaPayRechargeStatus.PENDING &&
+            expiredAt?.let { !it.isAfter(now) } == true
+        ) {
+            EnumOxaPayRechargeStatus.EXPIRED
+        } else {
+            status
+        }
+    }
 }

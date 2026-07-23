@@ -496,7 +496,7 @@ class AdminController(
             response.outputStream,
             listOf("orderId", "userId", "trackId", "usdAmount", "cnyAmount", "coinAmount", "status", "expiredAt", "paidAt", "createdAt", "updatedAt"),
             orders.asSequence().map {
-                listOf(it.id, it.userId, it.trackId, it.usdAmount, it.cnyAmount, it.coinAmount, it.status.name, it.expiredAt, it.paidAt, it.createdAt, it.updatedAt)
+                listOf(it.id, it.userId, it.trackId, it.usdAmount, it.cnyAmount, it.coinAmount, it.statusAt().name, it.expiredAt, it.paidAt, it.createdAt, it.updatedAt)
             },
         )
         auditExport(
@@ -523,6 +523,60 @@ class AdminController(
         val order = oxaPayRechargeService.getById(orderId)
             ?: return ResponseBase(404, "Recharge order not found")
         return ResponseBase(AdminOxaPayRechargeResponse.from(order))
+    }
+    // </editor-fold>
+
+    // <editor-fold desc="Manage OxaPay Recharge">
+    @PostMapping("/api/admin/oxapay/recharge/{orderId}/status")
+    fun updateOxaPayRechargeStatus(
+        @CurrentUserId userId: Int?,
+        @PathVariable orderId: String,
+        @RequestParam status: EnumOxaPayRechargeStatus,
+        @RealIP ip: String,
+    ): ResponseBase<AdminOxaPayRechargeResponse> {
+        requireAdmin<AdminOxaPayRechargeResponse>(userId)?.let { return it }
+        return try {
+            val order = oxaPayRechargeService.updateStatus(orderId, status)
+                ?: return ResponseBase(404, "Recharge order not found")
+            userOperationService.log(
+                userId!!,
+                EnumUserOperation.ADMIN_OXAPAY_STATUS,
+                "Updated OxaPay recharge $orderId status to ${order.status}",
+                ip,
+            )
+            ResponseBase(AdminOxaPayRechargeResponse.from(order))
+        } catch (e: IllegalArgumentException) {
+            ResponseBase(400, e.message ?: "Invalid OxaPay recharge status")
+        } catch (e: IllegalStateException) {
+            ResponseBase(400, e.message ?: "OxaPay recharge status cannot be changed")
+        }
+    }
+
+    @PostMapping("/api/admin/oxapay/recharge/{orderId}/top-up")
+    fun topUpOxaPayRecharge(
+        @CurrentUserId userId: Int?,
+        @PathVariable orderId: String,
+        @RealIP ip: String,
+    ): ResponseBase<AdminOxaPayRechargeResponse> {
+        requireAdmin<AdminOxaPayRechargeResponse>(userId)?.let { return it }
+        return try {
+            val result = oxaPayRechargeService.topUp(orderId)
+                ?: return ResponseBase(404, "Recharge order not found")
+            val order = result.order
+            if (result.credited) {
+                userOperationService.log(
+                    userId!!,
+                    EnumUserOperation.ADMIN_OXAPAY_TOP_UP,
+                    "Topped up OxaPay recharge $orderId with ${order.coinAmount} credits",
+                    ip,
+                )
+            }
+            ResponseBase(AdminOxaPayRechargeResponse.from(order))
+        } catch (e: IllegalArgumentException) {
+            ResponseBase(400, e.message ?: "Invalid OxaPay recharge top-up")
+        } catch (e: IllegalStateException) {
+            ResponseBase(400, e.message ?: "OxaPay recharge cannot be topped up")
+        }
     }
     // </editor-fold>
 

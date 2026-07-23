@@ -16,4 +16,5 @@ enum class EnumTransactionType(
     SAUTH_CONVERT("SAUTH_CONVERT", "Sauth转换"),
     COOKIE_CONVERT("COOKIE_CONVERT", "Cookie转换"),
     OXAPAY_RECHARGE("OXAPAY_RECHARGE", "OxaPay充值"),
+    OXAPAY_RECHARGE_MANUAL("OXAPAY_RECHARGE_MANUAL", "Manual OxaPay recharge"),
 }
